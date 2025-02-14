@@ -31,6 +31,15 @@ MULTIMODAL_MODELS = [
     "Qwen/Qwen2-VL-72B-Instruct"
 ]
 
+REASON_MODELS = [
+    "Pro/deepseek-ai/DeepSeek-R1",
+    "deepseek-ai/DeepSeek-R1-Distill-Llama-70B",
+    "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B",
+    "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B",
+    "deepseek-ai/DeepSeek-R1-Distill-Llama-8B",
+    "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
+]
+
 SEARCH_METHODS = {
     "文本搜索": "text_search",
     "新闻搜索": "news_search",
