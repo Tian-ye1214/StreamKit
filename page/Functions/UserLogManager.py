@@ -69,3 +69,17 @@ class UserLogManager:
 
         with open(file_path, 'r', encoding='utf-8') as f:
             return json.load(f)
+
+    def delete_chat_log(self, username, log_filename):
+        """删除指定聊天记录"""
+        user_dir = self._get_user_path(username)
+        file_path = os.path.join(user_dir, log_filename)
+        if os.path.exists(file_path):
+            os.remove(file_path)
+            return True
+        return False
+
+    def get_log_filepath(self, username, log_filename):
+        """获取日志文件的完整路径"""
+        user_dir = self._get_user_path(username)
+        return os.path.join(user_dir, log_filename)
