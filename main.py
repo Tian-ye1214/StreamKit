@@ -32,7 +32,7 @@ def initialize_session_state():
     if "openai_client" not in st.session_state:
         st.session_state.openai_client = None
     if "system_prompt" not in st.session_state:
-        st.session_state.system_prompt = "You are a helpful assistant"
+        st.session_state.system_prompt = ""
 
     if "file_content" not in st.session_state:
         st.session_state.file_content = None
@@ -85,16 +85,59 @@ def main():
             if len(history_logs) > 0:
                 st.markdown("### 历史对话")
                 selected_log = st.selectbox("选择历史记录", history_logs)
-                if st.button("加载选中记录"):
-                    chat_log = st.session_state.log_manager.load_chat_log(
+                col1, col2, col3 = st.columns([1, 1, 1])
+                with col1:
+                    if st.button("加载记录", help="读取并加载选中的对话记录"):
+                        chat_log = st.session_state.log_manager.load_chat_log(
+                            st.session_state.current_user,
+                            selected_log
+                        )
+                        st.session_state.chat_messages = chat_log["messages"]
+                        st.session_state.current_log_filename = selected_log + '.json'
+                        st.rerun()
+
+                with col2:
+                    if st.button("删除记录", help="删除选中的对话记录"):
+                        st.session_state.delete_target = selected_log
+                
+                with col3:
+                    json_data = st.session_state.log_manager.get_log_filepath(
                         st.session_state.current_user,
-                        selected_log
+                        selected_log + '.json'
                     )
-                    st.session_state.chat_messages = chat_log["messages"]
-                    st.session_state.current_log_filename = selected_log + '.json'
+                    with open(json_data, "rb") as f:
+                        st.download_button(
+                            label="下载记录",
+                            data=f,
+                            file_name=selected_log + '.json',
+                            mime="application/json",
+                            help="下载选中的对话记录到本地"
+                        )
+
+            if 'delete_target' in st.session_state:
+                st.warning(f"确认要永久删除记录[{st.session_state.delete_target}]吗？该过程不可逆！")
+                if st.button("确认删除", type="primary"):
+                    try:
+                        success = st.session_state.log_manager.delete_chat_log(
+                            st.session_state.current_user,
+                            st.session_state.delete_target + '.json'
+                        )
+                        if success:
+                            st.success("记录已永久删除")
+                            st.session_state.current_log_filename = None
+                            st.session_state.chat_messages = []
+                            del st.session_state.delete_target
+                            st.rerun()
+                        else:
+                            st.error("删除失败：文件不存在")
+                    except Exception as e:
+                        st.error(f"删除失败：{str(e)}")
+                if st.button("取消删除"):
+                    del st.session_state.delete_target
                     st.rerun()
-            else:
-                st.info("该用户暂无历史对话记录")
+
+        else:
+            st.info("该用户暂无历史对话记录")
 
         st.markdown("""
         <h3 style='text-align: center;'>
@@ -103,12 +146,12 @@ def main():
         """, unsafe_allow_html=True)
         st.session_state.openai_client = OpenAI(api_key=st.session_state.api_key, base_url=st.session_state.base_url)
 
-        model_display = st.selectbox("选择模型", list(MODEL_MAPPING.keys()), index=1)
+        model_display = st.selectbox("选择模型", list(MODEL_MAPPING.keys()), index=1, help="选择模型")
         model = MODEL_MAPPING[model_display]
-        if model in REASON_MODELS:
-            st.session_state.system_prompt = ""
+        if model not in REASON_MODELS:
+            st.session_state.system_prompt = "You are a helpful assistant."
 
-        if st.button("开启新对话"):
+        if st.button("开启新对话", help="开启新对话将清空当前对话记录"):
             st.session_state.current_log_filename = None
             st.session_state.chat_messages = []
             st.success("已成功开启新的对话")
