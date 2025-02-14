@@ -8,7 +8,7 @@ from pages.Functions.prompt import (
     generate_search_prompt,
     generate_combined_prompt
 )
-from pages.Functions.constants import MODEL_MAPPING, MULTIMODAL_MODELS, SEARCH_METHODS
+from pages.Functions.constants import MODEL_MAPPING, MULTIMODAL_MODELS, SEARCH_METHODS, REASON_MODELS
 
 st.set_page_config(
     page_title="Chat With AI",
@@ -32,7 +32,7 @@ def initialize_session_state():
     if "openai_client" not in st.session_state:
         st.session_state.openai_client = None
     if "system_prompt" not in st.session_state:
-        st.session_state.system_prompt = """You are a helpful assistant"""
+        st.session_state.system_prompt = "You are a helpful assistant"
 
     if "file_content" not in st.session_state:
         st.session_state.file_content = None
@@ -105,6 +105,8 @@ def main():
 
         model_display = st.selectbox("选择模型", list(MODEL_MAPPING.keys()), index=1)
         model = MODEL_MAPPING[model_display]
+        if model in REASON_MODELS:
+            st.session_state.system_prompt = ""
 
         if st.button("开启新对话"):
             st.session_state.current_log_filename = None
@@ -116,7 +118,7 @@ def main():
             col1, col2 = st.columns(2)
 
             with col1:
-                temperature = st.slider("Temperature", 0.0, 2.0, 0.7, 0.1,
+                temperature = st.slider("Temperature", 0.0, 2.0, 0.6, 0.1,
                                         help="控制响应的随机性，值越高表示响应越随机")
                 presence_penalty = st.slider("Presence Penalty", -2.0, 2.0, 0.0, 0.1,
                                              help="正值会根据新主题惩罚模型，负值会使模型更倾向于重复内容")
@@ -195,10 +197,10 @@ def main():
             | 场景 | 温度 |
             |------|------|
             | 代码生成/数学解题 | 0.0 |
-            | 数据抽取/分析/推理 | 0.7 |
-            | 通用对话 | 1.0 |
-            | 翻译 | 1.3 |
-            | 创意写作/诗歌创作 | 1.5 |
+            | 数据抽取/分析/推理 | 0.6 |
+            | 通用对话 | 0.8 |
+            | 翻译 | 1.0 |
+            | 创意写作/诗歌创作 | 1.3 |
             """)
 
     # 在显示历史消息前添加动态计数器
