@@ -1,0 +1,8 @@
+streamlit
+openai
+pymupdf
+pandas
+python-docx 
+gradio-tunneling
+duckduckgo_search
+
