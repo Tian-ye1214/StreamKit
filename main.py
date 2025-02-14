@@ -3,12 +3,12 @@ import streamlit as st
 from openai import OpenAI
 from pages.Functions.ExtractFileContents import extract_text, encode_image_to_base64
 from pages.Functions.UserLogManager import UserLogManager
-from pages.Functions.prompt import (
+from pages.Functions.Prompt import (
     generate_document_prompt,
     generate_search_prompt,
     generate_combined_prompt
 )
-from pages.Functions.constants import MODEL_MAPPING, MULTIMODAL_MODELS, SEARCH_METHODS, REASON_MODELS
+from pages.Functions.Constants import MODEL_MAPPING, MULTIMODAL_MODELS, SEARCH_METHODS, REASON_MODELS
 
 st.set_page_config(
     page_title="Chat With AI",
