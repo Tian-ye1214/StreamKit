@@ -2,14 +2,17 @@
 import streamlit as st
 from openai import OpenAI
 from pages.Functions.ExtractFileContents import encode_image_to_base64
-from pages.Functions.BackendInteraction import UserInteraction, ParameterConfiguration, get_system_prompt
+from pages.Functions.BackendInteraction import (
+    UserInteraction,
+    ParameterConfiguration,
+    get_system_prompt,
+    initialize_session_state)
 from pages.Functions.WebSearch import WebSearch
 from pages.Functions.Constants import (
     MODEL_MAPPING,
     VISIONMODAL_MAPPING,
     SEARCH_METHODS,
     REASON_MODELS,
-    initialize_session_state
 )
 
 st.set_page_config(
