@@ -1,95 +1,55 @@
 import streamlit as st
 from openai import OpenAI
 from pages.Functions.ExtractFileContents import extract_text, encode_image_to_base64
+from pages.Functions.BackendInteraction import UserInteraction, ParameterConfiguration, get_system_prompt
 from pages.Functions.Constants import (
-    MULTIMODAL_MAPPING,
+    VISIONMODAL_MAPPING,
+    SEARCH_METHODS,
     initialize_session_state
 )
-from pages.Functions.MmConversion import mmconversion
-from pages.Functions.Prompt import (
-    generate_document_prompt,
-    generate_search_prompt,
-    generate_combined_prompt
-)
+from pages.Functions.WebSearch import WebSearch
+import io
 
 
 def main():
     initialize_session_state()
+    st.session_state.openai_client = OpenAI(api_key=st.session_state.api_key, base_url=st.session_state.base_url)
 
-    st.set_page_config(layout="wide")
     st.markdown("""
     <h1 style='text-align: center;'>
-        Multi-modal Chat
+        Multimodal Chat
     </h1>
     <div style='text-align: center; margin-bottom: 20px;'>
     </div>
     """, unsafe_allow_html=True)
 
     with st.sidebar:
-        st.session_state.openai_client = OpenAI(api_key=st.session_state.api_key, base_url=st.session_state.base_url)
-        model = st.selectbox("选择模型", list(MULTIMODAL_MAPPING.keys()))
-        model = MULTIMODAL_MAPPING[model]
-        st.session_state.system_prompt = "You are a helpful assistant."
+        UserInteraction()
+        st.markdown("""
+        <h3 style='text-align: center;'>
+            模型配置
+        </h3>
+        """, unsafe_allow_html=True)
 
-        if st.button("开启新对话"):
+        if st.button("开启新对话", help="开启新对话将清空当前对话记录"):
             st.session_state.current_log_filename = None
             st.session_state.chat_messages = []
             st.success("已成功开启新的对话")
             st.rerun()
 
-        with st.expander("对话参数", expanded=False):
-            col1, col2 = st.columns(2)
+        model_display = st.selectbox("选择模型", list(VISIONMODAL_MAPPING.keys()), index=1, help="选择模型")
+        model = VISIONMODAL_MAPPING[model_display]
 
-            with col1:
-                temperature = st.slider("Temperature", 0.0, 2.0, 0.6, 0.1,
-                                        help="控制响应的随机性，值越高表示响应越随机")
-                presence_penalty = st.slider("Presence Penalty", -2.0, 2.0, 0.0, 0.1,
-                                             help="正值会根据新主题惩罚模型，负值会使模型更倾向于重复内容")
-                max_tokens = st.number_input("Max Tokens",
-                                             min_value=1,
-                                             max_value=8192,
-                                             value=4096,
-                                             help="生成文本的最大长度")
-
-            with col2:
-                top_p = st.slider("Top P", 0.0, 1.0, 0.9, 0.1,
-                                  help="控制词汇选择的多样性")
-                frequency_penalty = st.slider("Frequency Penalty", -2.0, 2.0, 0.0, 0.1,
-                                              help="正值会根据文本频率惩罚模型，负值鼓励重复")
-                stream = st.toggle("流式输出", value=True,
-                                   help="启用流式输出可以实时看到生成结果")
-
-        with st.expander("Prompt设置", expanded=False):
-            system_prompt = st.text_area("System Prompt",
-                                         value=st.session_state.system_prompt,
-                                         help="设置AI助手的角色和行为")
-            if st.button("更新System Prompt"):
-                st.session_state.system_prompt = system_prompt
-                st.success("System Prompt已更新")
-
-        with st.expander("文件上传", expanded=False):
-            uploaded_file = st.file_uploader(
-                "上传文件(支持PDF、Word、TxT、CSV)",
-                type=["pdf", "docx", "txt", "csv"],
-                accept_multiple_files=False
+        if model == "deepseek-ai/Janus-Pro-1B":
+            st.session_state.janus_mode = st.radio(
+                "工作模式",
+                ["图片理解模式", "图片生成模式"],
+                index=0,
+                horizontal=True,
+                help="选择Janus模型的工作模式"
             )
 
-            if uploaded_file:
-                try:
-                    file_content = extract_text(uploaded_file)
-                    if file_content:
-                        st.session_state.file_content = file_content
-                        st.success("文件上传成功！")
-                        st.text_area("文件内容预览",
-                                     value=file_content[:300] + "...",
-                                     height=150)
-                except Exception as e:
-                    st.error(f"文件处理失败: {str(e)}")
-
-            if st.button("清除上传的文件"):
-                st.session_state.file_content = None
-                st.success("文件已清除")
-                st.rerun()
+        ParameterConfiguration()
 
     with st.expander("图片上传", expanded=False):
         uploaded_image = st.file_uploader(
@@ -99,39 +59,92 @@ def main():
         if uploaded_image:
             st.image(uploaded_image, caption="图片预览", use_container_width=True)
 
+    with st.expander("生成图片操作", expanded=False):
+        if 'generated_images' in st.session_state:
+            st.markdown("### 生成图片预览")
+            cols = st.columns(3)
+            for idx, img in enumerate(st.session_state.generated_images):
+                with cols[idx % 3]:
+                    st.image(img, use_container_width=True)
+                    # 创建下载按钮
+                    buf = io.BytesIO()
+                    img.save(buf, format="PNG")
+                    byte_im = buf.getvalue()
+                    st.download_button(
+                        label=f"下载图片 {idx+1}",
+                        data=byte_im,
+                        file_name=f"generated_image_{idx+1}.png",
+                        mime="image/png",
+                        key=f"download_{idx}"
+                    )
+            
+            # 清空按钮
+            if st.button("清空所有生成图片"):
+                del st.session_state.generated_images
+                st.rerun()
+        else:
+            st.info("暂无生成图片")
+
+    msg_counter = st.empty()
+    msg_counter.markdown(f"""
+    <div style='text-align: center; margin: 10px 0; font-size:14px;'>
+        当前对话消息数：<span style='color: #ff4b4b; font-weight:bold;'>{len(st.session_state.chat_messages)}</span>/40
+    </div>
+    """, unsafe_allow_html=True)
+
+    for message in st.session_state.chat_messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
 
     if prompt := st.chat_input("在这里输入您的问题："):
         current_prompt = {"role": "user", "content": prompt}
         st.session_state.chat_messages.append(current_prompt)
+        msg_counter.markdown(f"""
+        <div style='text-align: center; margin: 10px 0; font-size:14px;'>
+            当前对话消息数：<span style='color: #ff4b4b; font-weight:bold;'>{len(st.session_state.chat_messages)}</span>/40
+        </div>
+        """, unsafe_allow_html=True)
 
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        #janus多模态理解需要上传图片
-        if model == "deepseek-ai/Janus-Pro-1B":
-            if not uploaded_image:
-                st.warning("请上传图片!")
-                return 
+        if st.session_state.search_mode in SEARCH_METHODS:
+            try:
+                search = WebSearch(query=prompt, max_results=st.session_state.search_max_results)
+                method = getattr(search, SEARCH_METHODS[st.session_state.search_mode])
+                st.session_state.search_result = method()
+
+                # 显示搜索结果
+                with st.chat_message("assistant"):
+                    st.markdown("🔍 搜索到以下相关信息：")
+                    for i, result in enumerate(st.session_state.search_result):
+                        st.markdown(f"{i + 1}. [{result['title']}]({result['href']})")
+                        st.caption(result['body'][:min(len(result['body']), 100)] + "...")
+            except Exception as e:
+                st.error(f"没有检索到答案哦，错误信息:{e}")
+                st.session_state.search_result = None
 
         # AI响应
         with st.chat_message("assistant"):
             try:
-                def get_system_prompt():
-                    if st.session_state.file_content and st.session_state.search_result:
-                        return generate_combined_prompt(
-                            st.session_state.file_content,
-                            st.session_state.search_result
-                        )
-                    if st.session_state.file_content:
-                        return generate_document_prompt(st.session_state.file_content)
-                    if st.session_state.search_result:
-                        return generate_search_prompt(st.session_state.search_result)
-                    return st.session_state.system_prompt
-
-                messages = [{"role": "system", "content": get_system_prompt()}]
-
-                if uploaded_image:
-                    base64_image = encode_image_to_base64(uploaded_image)
+                if model == "deepseek-ai/Janus-Pro-1B":
+                    if st.session_state.get('janus_mode', None) == "图片理解模式" and uploaded_image:
+                        if uploaded_image:
+                            from pages.Functions.MmConversion import mmconversion
+                            assistant_response = mmconversion(model, uploaded_image, prompt)
+                            st.markdown(assistant_response)
+                        else:
+                            st.error("请先上传图片！")
+                            return
+                    elif st.session_state.get('janus_mode', None) == "图片生成模式":
+                        from pages.Functions.MmGenerator import mmgeneration
+                        generated_images = mmgeneration(model, prompt)
+                        if generated_images:
+                            st.session_state.generated_images = generated_images  # 存储生成的图片
+                            st.rerun()  # 触发页面刷新以显示图片
+                else:
+                    messages = [{"role": "system", "content": get_system_prompt()}]
+                    base64_image = encode_image_to_base64(uploaded_image) if uploaded_image else None
                     if base64_image:
                         messages.append({
                             "role": "user",
@@ -142,17 +155,9 @@ def main():
                         })
                     else:
                         messages.append({"role": "user", "content": prompt})
-                else:
-                    messages.append({"role": "user", "content": prompt})
-
-                messages.extend([{"role": m["role"], "content": m["content"]}
-                                for m in st.session_state.chat_messages])
-                
-                if model == "deepseek-ai/Janus-Pro-1B":
-                    assistant_response = mmconversion(model,base64_image,prompt)     
-                    st.markdown(assistant_response)
-                else:
-                    if stream:
+                    messages.extend(
+                        [{"role": m["role"], "content": m["content"]} for m in st.session_state.chat_messages])
+                    if st.session_state.stream:
                         reason_placeholder = st.empty()
                         message_placeholder = st.empty()
                         content = ""
@@ -161,11 +166,11 @@ def main():
                         for chunk in st.session_state.openai_client.chat.completions.create(
                                 model=model,
                                 messages=messages,
-                                temperature=temperature,
-                                top_p=top_p,
-                                presence_penalty=presence_penalty,
-                                frequency_penalty=frequency_penalty,
-                                max_tokens=max_tokens,
+                                temperature=st.session_state.temperature,
+                                top_p=st.session_state.top_p,
+                                presence_penalty=st.session_state.presence_penalty,
+                                frequency_penalty=st.session_state.frequency_penalty,
+                                max_tokens=st.session_state.max_tokens,
                                 stream=True
                         ):
                             if chunk.choices and len(chunk.choices) > 0:
@@ -188,11 +193,11 @@ def main():
                         response = st.session_state.openai_client.chat.completions.create(
                             model=model,
                             messages=messages,
-                            temperature=temperature,
-                            top_p=top_p,
-                            presence_penalty=presence_penalty,
-                            frequency_penalty=frequency_penalty,
-                            max_tokens=max_tokens,
+                            temperature=st.session_state.temperature,
+                            top_p=st.session_state.top_p,
+                            presence_penalty=st.session_state.presence_penalty,
+                            frequency_penalty=st.session_state.frequency_penalty,
+                            max_tokens=st.session_state.max_tokens,
                             stream=False
                         )
                         reasoning_content = getattr(response.choices[0].message, 'reasoning_content', '')
@@ -205,6 +210,7 @@ def main():
                                 unsafe_allow_html=True
                             )
                         st.markdown(assistant_response)
+
                 current_response = {"role": "assistant", "content": assistant_response}
                 st.session_state.chat_messages.append(current_response)
 
