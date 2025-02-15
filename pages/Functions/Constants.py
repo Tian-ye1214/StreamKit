@@ -1,3 +1,7 @@
+import streamlit as st
+from pages.Functions.UserLogManager import UserLogManager
+
+
 # 付费模型
 MODEL_MAPPING = {
     "DeepSeek-v3": "Pro/deepseek-ai/DeepSeek-V3",
@@ -8,8 +12,13 @@ MODEL_MAPPING = {
     "R1-Distill-Qwen-7B": "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
     "QWQ": "Qwen/QwQ-32B-Preview",
     "Qwen2.5-72B": "Qwen/Qwen2.5-72B-Instruct-128K",
-    "QVQ(支持多模态)": "Qwen/QVQ-72B-Preview",
-    "Qwen2-VL-72B(支持多模态)": "Qwen/Qwen2-VL-72B-Instruct",
+}
+MULTIMODAL_MAPPING = {
+    "QVQ-72B": "Qwen/QVQ-72B-Preview",
+    "Qwen2-VL-72B": "Qwen/Qwen2-VL-72B-Instruct",
+    "Qwen2-VL-7B": "Pro/Qwen/Qwen2-VL-7B-Instruct",
+    "DeepSeek-VL2": "deepseek-ai/deepseek-vl2",
+    "InternVL2": "OpenGVLab/InternVL2-26B",
 }
 
 # 免费模型
@@ -24,17 +33,6 @@ FREE_MODEL_MAPPING = {
     "GLM-4-9B": "THUDM/glm-4-9b-chat",
     "Yi-1.5-9B": "01-ai/Yi-1.5-9B-Chat-16K",
     "Gemma2-9b": "google/gemma-2-9b-it",
-}
-
-MULTIMODAL_MODELS = [
-    "Qwen/QVQ-72B-Preview",
-    "Qwen/Qwen2-VL-72B-Instruct"
-]
-
-MULTIMODAL_MAPPING = {
-    "QVQ(支持多模态)": "Qwen/QVQ-72B-Preview",
-    "Qwen2-VL-72B(支持多模态)": "Qwen/Qwen2-VL-72B-Instruct",
-    "Janus-pro-1B": "deepseek-ai/Janus-Pro-1B",
 }
 
 REASON_MODELS = [
@@ -52,3 +50,39 @@ SEARCH_METHODS = {
     "图片搜索": "image_search",
     "视频搜索": "video_search"
 }
+
+
+def initialize_session_state():
+    if "api_key" not in st.session_state:
+        st.session_state.api_key = 'sk-wxmqrirjoqrahuuyxbornwawplaobdlpxjefkzpfgiackdmu'
+    if "base_url" not in st.session_state:
+        st.session_state.base_url = 'https://api.siliconflow.cn/v1/'
+
+    if "chat_messages" not in st.session_state:
+        st.session_state.chat_messages = []
+    if len(st.session_state.chat_messages) > 40:
+        st.session_state.chat_messages = st.session_state.chat_messages[-40:]
+
+    if "openai_client" not in st.session_state:
+        st.session_state.openai_client = None
+    if "system_prompt" not in st.session_state:
+        st.session_state.system_prompt = ""
+
+    if "file_content" not in st.session_state:
+        st.session_state.file_content = None
+
+    if "current_user" not in st.session_state:
+        st.session_state.current_user = None
+    if "log_manager" not in st.session_state:
+        st.session_state.log_manager = UserLogManager()
+
+    if "current_log_filename" not in st.session_state:
+        st.session_state.current_log_filename = None
+
+    if "search_mode" not in st.session_state:
+        st.session_state.search_mode = None
+    if "search_result" not in st.session_state:
+        st.session_state.search_result = None
+
+    if 'interaction_mode' not in st.session_state:
+        st.session_state.interaction_mode = "纯文本模式"
