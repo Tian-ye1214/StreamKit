@@ -1,11 +1,11 @@
 import streamlit as st
 from openai import OpenAI
 from pages.Functions.ExtractFileContents import extract_text, encode_image_to_base64
-
 from pages.Functions.Constants import (
     MULTIMODAL_MAPPING,
     initialize_session_state
 )
+from pages.Functions.MmConversion import mmconversion
 from pages.Functions.Prompt import (
     generate_document_prompt,
     generate_search_prompt,
@@ -99,12 +99,19 @@ def main():
         if uploaded_image:
             st.image(uploaded_image, caption="图片预览", use_container_width=True)
 
+
     if prompt := st.chat_input("在这里输入您的问题："):
         current_prompt = {"role": "user", "content": prompt}
         st.session_state.chat_messages.append(current_prompt)
 
         with st.chat_message("user"):
             st.markdown(prompt)
+
+        #janus多模态理解需要上传图片
+        if model == "deepseek-ai/Janus-Pro-1B":
+            if not uploaded_image:
+                st.warning("请上传图片!")
+                return 
 
         # AI响应
         with st.chat_message("assistant"):
@@ -139,15 +146,46 @@ def main():
                     messages.append({"role": "user", "content": prompt})
 
                 messages.extend([{"role": m["role"], "content": m["content"]}
-                                 for m in st.session_state.chat_messages])
+                                for m in st.session_state.chat_messages])
+                
+                if model == "deepseek-ai/Janus-Pro-1B":
+                    assistant_response = mmconversion(model,base64_image,prompt)     
+                    st.markdown(assistant_response)
+                else:
+                    if stream:
+                        reason_placeholder = st.empty()
+                        message_placeholder = st.empty()
+                        content = ""
+                        reasoning_content = ""
 
-                if stream:
-                    reason_placeholder = st.empty()
-                    message_placeholder = st.empty()
-                    content = ""
-                    reasoning_content = ""
-
-                    for chunk in st.session_state.openai_client.chat.completions.create(
+                        for chunk in st.session_state.openai_client.chat.completions.create(
+                                model=model,
+                                messages=messages,
+                                temperature=temperature,
+                                top_p=top_p,
+                                presence_penalty=presence_penalty,
+                                frequency_penalty=frequency_penalty,
+                                max_tokens=max_tokens,
+                                stream=True
+                        ):
+                            if chunk.choices and len(chunk.choices) > 0:
+                                delta = chunk.choices[0].delta
+                                if getattr(delta, 'reasoning_content', None):
+                                    reasoning_content += delta.reasoning_content
+                                    reason_placeholder.markdown(
+                                        f"<div style='background:#f0f0f0; border-radius:5px; padding:10px; margin-bottom:10px; font-size:14px;'>"
+                                        f"🤔 {reasoning_content}</div>",
+                                        unsafe_allow_html=True
+                                    )
+                                if delta and delta.content is not None:
+                                    content += delta.content
+                                    message_placeholder.markdown(
+                                        f"<div style='font-size:16px; margin-top:10px;'>{content}</div>",
+                                        unsafe_allow_html=True
+                                    )
+                        assistant_response = content
+                    else:
+                        response = st.session_state.openai_client.chat.completions.create(
                             model=model,
                             messages=messages,
                             temperature=temperature,
@@ -155,45 +193,18 @@ def main():
                             presence_penalty=presence_penalty,
                             frequency_penalty=frequency_penalty,
                             max_tokens=max_tokens,
-                            stream=True
-                    ):
-                        if chunk.choices and len(chunk.choices) > 0:
-                            delta = chunk.choices[0].delta
-                            if getattr(delta, 'reasoning_content', None):
-                                reasoning_content += delta.reasoning_content
-                                reason_placeholder.markdown(
-                                    f"<div style='background:#f0f0f0; border-radius:5px; padding:10px; margin-bottom:10px; font-size:14px;'>"
-                                    f"🤔 {reasoning_content}</div>",
-                                    unsafe_allow_html=True
-                                )
-                            if delta and delta.content is not None:
-                                content += delta.content
-                                message_placeholder.markdown(
-                                    f"<div style='font-size:16px; margin-top:10px;'>{content}</div>",
-                                    unsafe_allow_html=True
-                                )
-                    assistant_response = content
-                else:
-                    response = st.session_state.openai_client.chat.completions.create(
-                        model=model,
-                        messages=messages,
-                        temperature=temperature,
-                        top_p=top_p,
-                        presence_penalty=presence_penalty,
-                        frequency_penalty=frequency_penalty,
-                        max_tokens=max_tokens,
-                        stream=False
-                    )
-                    reasoning_content = getattr(response.choices[0].message, 'reasoning_content', '')
-                    assistant_response = response.choices[0].message.content
-
-                    if reasoning_content:
-                        st.markdown(
-                            f"<div style='background:#f0f0f0; border-radius:5px; padding:10px; margin-bottom:10px; font-size:14px;'>"
-                            f"🤔 {reasoning_content}</div>",
-                            unsafe_allow_html=True
+                            stream=False
                         )
-                    st.markdown(assistant_response)
+                        reasoning_content = getattr(response.choices[0].message, 'reasoning_content', '')
+                        assistant_response = response.choices[0].message.content
+
+                        if reasoning_content:
+                            st.markdown(
+                                f"<div style='background:#f0f0f0; border-radius:5px; padding:10px; margin-bottom:10px; font-size:14px;'>"
+                                f"🤔 {reasoning_content}</div>",
+                                unsafe_allow_html=True
+                            )
+                        st.markdown(assistant_response)
                 current_response = {"role": "assistant", "content": assistant_response}
                 st.session_state.chat_messages.append(current_response)
 
