@@ -31,6 +31,12 @@ MULTIMODAL_MODELS = [
     "Qwen/Qwen2-VL-72B-Instruct"
 ]
 
+MULTIMODAL_MAPPING = {
+    "QVQ(支持多模态)": "Qwen/QVQ-72B-Preview",
+    "Qwen2-VL-72B(支持多模态)": "Qwen/Qwen2-VL-72B-Instruct",
+    "Janus-pro-1B": "deepseek-ai/Janus-Pro-1B",
+}
+
 REASON_MODELS = [
     "Pro/deepseek-ai/DeepSeek-R1",
     "deepseek-ai/DeepSeek-R1-Distill-Llama-70B",
