@@ -5,6 +5,7 @@ from pages.Functions.Prompt import (
     generate_search_prompt,
     generate_combined_prompt
 )
+from pages.Functions.UserLogManager import UserLogManager
 
 
 def initialize_session_state():
