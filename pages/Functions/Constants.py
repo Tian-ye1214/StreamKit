@@ -19,6 +19,7 @@ MULTIMODAL_MAPPING = {
     "Qwen2-VL-7B": "Pro/Qwen/Qwen2-VL-7B-Instruct",
     "DeepSeek-VL2": "deepseek-ai/deepseek-vl2",
     "InternVL2": "OpenGVLab/InternVL2-26B",
+    "Janus-pro-1B": "deepseek-ai/Janus-Pro-1B",
 }
 
 # 免费模型
