@@ -1,14 +1,20 @@
-import os
+# -*- coding: utf-8 -*-
 import streamlit as st
 from openai import OpenAI
 from pages.Functions.ExtractFileContents import extract_text, encode_image_to_base64
-from pages.Functions.UserLogManager import UserLogManager
 from pages.Functions.Prompt import (
     generate_document_prompt,
     generate_search_prompt,
     generate_combined_prompt
 )
-from pages.Functions.Constants import MODEL_MAPPING, MULTIMODAL_MODELS, SEARCH_METHODS, REASON_MODELS
+from pages.Functions.WebSearch import WebSearch
+from pages.Functions.Constants import (
+    MODEL_MAPPING,
+    MULTIMODAL_MAPPING,
+    SEARCH_METHODS,
+    REASON_MODELS,
+    initialize_session_state
+)
 
 st.set_page_config(
     page_title="Chat With AI",
@@ -16,39 +22,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
-
-
-def initialize_session_state():
-    if "api_key" not in st.session_state:
-        st.session_state.api_key = 'sk-wxmqrirjoqrahuuyxbornwawplaobdlpxjefkzpfgiackdmu'
-    if "base_url" not in st.session_state:
-        st.session_state.base_url = os.getenv('OPENAI_BASE_URL', "https://api.siliconflow.cn/v1/")
-
-    if "chat_messages" not in st.session_state:
-        st.session_state.chat_messages = []
-    if len(st.session_state.chat_messages) > 40:
-        st.session_state.chat_messages = st.session_state.chat_messages[-40:]
-
-    if "openai_client" not in st.session_state:
-        st.session_state.openai_client = None
-    if "system_prompt" not in st.session_state:
-        st.session_state.system_prompt = ""
-
-    if "file_content" not in st.session_state:
-        st.session_state.file_content = None
-
-    if "current_user" not in st.session_state:
-        st.session_state.current_user = None
-    if "log_manager" not in st.session_state:
-        st.session_state.log_manager = UserLogManager()
-
-    if "current_log_filename" not in st.session_state:
-        st.session_state.current_log_filename = None
-
-    if "search_mode" not in st.session_state:
-        st.session_state.search_mode = None
-    if "search_result" not in st.session_state:
-        st.session_state.search_result = None
 
 
 def main():
@@ -146,16 +119,29 @@ def main():
         """, unsafe_allow_html=True)
         st.session_state.openai_client = OpenAI(api_key=st.session_state.api_key, base_url=st.session_state.base_url)
 
-        model_display = st.selectbox("选择模型", list(MODEL_MAPPING.keys()), index=1, help="选择模型")
-        model = MODEL_MAPPING[model_display]
-        if model not in REASON_MODELS:
-            st.session_state.system_prompt = "You are a helpful assistant."
+        # interaction_mode = st.radio(
+        #     "交互模式",
+        #     ["纯文本模式", "多模态模式"],
+        #     index=0,
+        #     help="选择交互模式：纯文本或多模态（支持图片+文本）"
+        # )
+        interaction_mode = "纯文本模式"
 
         if st.button("开启新对话", help="开启新对话将清空当前对话记录"):
             st.session_state.current_log_filename = None
             st.session_state.chat_messages = []
             st.success("已成功开启新的对话")
             st.rerun()
+
+        if interaction_mode == "多模态模式":
+            model_display = st.selectbox("选择模型", list(MULTIMODAL_MAPPING.keys()), index=1, help="选择模型")
+            model = MULTIMODAL_MAPPING[model_display]
+        else:
+            model_display = st.selectbox("选择模型", list(MODEL_MAPPING.keys()), index=1, help="选择模型")
+            model = MODEL_MAPPING[model_display]
+
+        if model not in REASON_MODELS:
+            st.session_state.system_prompt = "You are a helpful assistant."
 
         with st.expander("对话参数", expanded=False):
             col1, col2 = st.columns(2)
@@ -226,7 +212,7 @@ def main():
                                                                       value=3,
                                                                       help="设置最大返回的搜索结果数量")
 
-        if model in MULTIMODAL_MODELS:
+        if interaction_mode == "多模态模式":
             with st.expander("图片上传", expanded=False):
                 uploaded_image = st.file_uploader(
                     "上传图片",
@@ -274,7 +260,6 @@ def main():
 
         if st.session_state.search_mode in SEARCH_METHODS:
             try:
-                from pages.Functions.WebSearch import WebSearch
                 search = WebSearch(query=prompt, max_results=st.session_state.search_max_results)
                 method = getattr(search, SEARCH_METHODS[st.session_state.search_mode])
                 st.session_state.search_result = method()
@@ -306,7 +291,7 @@ def main():
 
                 messages = [{"role": "system", "content": get_system_prompt()}]
 
-                if model in MULTIMODAL_MODELS and uploaded_image:
+                if interaction_mode == "多模态模式":
                     base64_image = encode_image_to_base64(uploaded_image)
                     if base64_image:
                         messages.append({
@@ -367,7 +352,7 @@ def main():
                         max_tokens=max_tokens,
                         stream=False
                     )
-                    reasoning_content = getattr(response.choices[0].message, 'reasoning_content', '')
+                    reasoning_content = getattr(response.choices[0].message, 'reasoning_content', None)
                     assistant_response = response.choices[0].message.content
 
                     if reasoning_content:
