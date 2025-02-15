@@ -7,6 +7,41 @@ from pages.Functions.Prompt import (
 )
 
 
+def initialize_session_state():
+    if "api_key" not in st.session_state:
+        st.session_state.api_key = 'sk-wxmqrirjoqrahuuyxbornwawplaobdlpxjefkzpfgiackdmu'
+    if "base_url" not in st.session_state:
+        st.session_state.base_url = 'https://api.siliconflow.cn/v1/'
+    if "chat_messages" not in st.session_state:
+        st.session_state.chat_messages = []
+    if len(st.session_state.chat_messages) > 40:
+        st.session_state.chat_messages = st.session_state.chat_messages[-40:]
+
+    if "openai_client" not in st.session_state:
+        st.session_state.openai_client = None
+    if "system_prompt" not in st.session_state:
+        st.session_state.system_prompt = ""
+
+    if "file_content" not in st.session_state:
+        st.session_state.file_content = None
+
+    if "current_user" not in st.session_state:
+        st.session_state.current_user = None
+    if "log_manager" not in st.session_state:
+        st.session_state.log_manager = UserLogManager()
+
+    if "current_log_filename" not in st.session_state:
+        st.session_state.current_log_filename = None
+
+    if "search_mode" not in st.session_state:
+        st.session_state.search_mode = None
+    if "search_result" not in st.session_state:
+        st.session_state.search_result = None
+
+    if 'interaction_mode' not in st.session_state:
+        st.session_state.interaction_mode = "纯文本模式"
+
+
 def UserInteraction():
     st.markdown("### 用户登录")
     username = st.text_input("请输入用户名", key="username_input")
@@ -90,22 +125,22 @@ def ParameterConfiguration():
 
         with col1:
             st.session_state.temperature = st.slider("Temperature", 0.0, 2.0, 0.6, 0.1,
-                                    help="控制响应的随机性，值越高表示响应越随机")
+                                                     help="控制响应的随机性，值越高表示响应越随机")
             st.session_state.presence_penalty = st.slider("Presence Penalty", -2.0, 2.0, 0.0, 0.1,
-                                         help="正值会根据新主题惩罚模型，负值会使模型更倾向于重复内容")
+                                                          help="正值会根据新主题惩罚模型，负值会使模型更倾向于重复内容")
             st.session_state.max_tokens = st.number_input("Max Tokens",
-                                         min_value=1,
-                                         max_value=8192,
-                                         value=4096,
-                                         help="生成文本的最大长度")
+                                                          min_value=1,
+                                                          max_value=8192,
+                                                          value=4096,
+                                                          help="生成文本的最大长度")
 
         with col2:
             st.session_state.top_p = st.slider("Top P", 0.0, 1.0, 0.9, 0.1,
-                              help="控制词汇选择的多样性")
+                                               help="控制词汇选择的多样性")
             st.session_state.frequency_penalty = st.slider("Frequency Penalty", -2.0, 2.0, 0.0, 0.1,
-                                          help="正值会根据文本频率惩罚模型，负值鼓励重复")
+                                                           help="正值会根据文本频率惩罚模型，负值鼓励重复")
             st.session_state.stream = st.toggle("流式输出", value=True,
-                               help="启用流式输出可以实时看到生成结果")
+                                                help="启用流式输出可以实时看到生成结果")
 
     with st.expander("Prompt设置", expanded=False):
         system_prompt = st.text_area("System Prompt",
@@ -177,4 +212,3 @@ def get_system_prompt():
     if st.session_state.search_result:
         return generate_search_prompt(st.session_state.search_result)
     return st.session_state.system_prompt
-
