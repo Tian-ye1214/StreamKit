@@ -1,16 +1,12 @@
 # -*- coding: utf-8 -*-
 import streamlit as st
 from openai import OpenAI
-from pages.Functions.ExtractFileContents import extract_text, encode_image_to_base64
-from pages.Functions.Prompt import (
-    generate_document_prompt,
-    generate_search_prompt,
-    generate_combined_prompt
-)
+from pages.Functions.ExtractFileContents import encode_image_to_base64
+from pages.Functions.BackendInteraction import UserInteraction, ParameterConfiguration, get_system_prompt
 from pages.Functions.WebSearch import WebSearch
 from pages.Functions.Constants import (
     MODEL_MAPPING,
-    MULTIMODAL_MAPPING,
+    VISIONMODAL_MAPPING,
     SEARCH_METHODS,
     REASON_MODELS,
     initialize_session_state
@@ -26,7 +22,8 @@ st.set_page_config(
 
 def main():
     initialize_session_state()
-
+    st.session_state.openai_client = OpenAI(api_key=st.session_state.api_key, base_url=st.session_state.base_url)
+    uploaded_image = None
     st.markdown("""
     <h1 style='text-align: center;'>
         Chat With AI
@@ -36,88 +33,13 @@ def main():
     """, unsafe_allow_html=True)
 
     with st.sidebar:
-        st.markdown("### 用户登录")
-        username = st.text_input("请输入用户名", key="username_input")
-
-        if st.button("登录/注册"):
-            if username.strip() == "":
-                st.error("用户名不能为空")
-            else:
-                st.session_state.current_user = username
-                if not st.session_state.log_manager.check_user_exists(username):
-                    st.success(f"欢迎 {'新用户'} ")
-                    st.session_state.log_manager.user_register(username)
-
-                else:
-                    st.success(f"欢迎 {'回来'} {username}！")
-
-        if st.session_state.current_user:
-            st.markdown(f"当前用户：**{st.session_state.current_user}**")
-            history_logs = st.session_state.log_manager.get_user_history(st.session_state.current_user)
-
-            if len(history_logs) > 0:
-                st.markdown("### 历史对话")
-                selected_log = st.selectbox("选择历史记录", history_logs)
-                col1, col2, col3 = st.columns([1, 1, 1])
-                with col1:
-                    if st.button("加载记录", help="读取并加载选中的对话记录"):
-                        chat_log = st.session_state.log_manager.load_chat_log(
-                            st.session_state.current_user,
-                            selected_log
-                        )
-                        st.session_state.chat_messages = chat_log["messages"]
-                        st.session_state.current_log_filename = selected_log + '.json'
-                        st.rerun()
-
-                with col2:
-                    if st.button("删除记录", help="删除选中的对话记录"):
-                        st.session_state.delete_target = selected_log
-                
-                with col3:
-                    json_data = st.session_state.log_manager.get_log_filepath(
-                        st.session_state.current_user,
-                        selected_log + '.json'
-                    )
-                    with open(json_data, "rb") as f:
-                        st.download_button(
-                            label="下载记录",
-                            data=f,
-                            file_name=selected_log + '.json',
-                            mime="application/json",
-                            help="下载选中的对话记录到本地"
-                        )
-
-            if 'delete_target' in st.session_state:
-                st.warning(f"确认要永久删除记录[{st.session_state.delete_target}]吗？该过程不可逆！")
-                if st.button("确认删除", type="primary"):
-                    try:
-                        success = st.session_state.log_manager.delete_chat_log(
-                            st.session_state.current_user,
-                            st.session_state.delete_target + '.json'
-                        )
-                        if success:
-                            st.success("记录已永久删除")
-                            st.session_state.current_log_filename = None
-                            st.session_state.chat_messages = []
-                            del st.session_state.delete_target
-                            st.rerun()
-                        else:
-                            st.error("删除失败：文件不存在")
-                    except Exception as e:
-                        st.error(f"删除失败：{str(e)}")
-                if st.button("取消删除"):
-                    del st.session_state.delete_target
-                    st.rerun()
-
-        else:
-            st.info("该用户暂无历史对话记录")
+        UserInteraction()
 
         st.markdown("""
         <h3 style='text-align: center;'>
             模型配置
         </h3>
         """, unsafe_allow_html=True)
-        st.session_state.openai_client = OpenAI(api_key=st.session_state.api_key, base_url=st.session_state.base_url)
 
         # interaction_mode = st.radio(
         #     "交互模式",
@@ -125,7 +47,7 @@ def main():
         #     index=0,
         #     help="选择交互模式：纯文本或多模态（支持图片+文本）"
         # )
-        interaction_mode = "纯文本模式"
+        interaction_mode = '纯文本模式'
 
         if st.button("开启新对话", help="开启新对话将清空当前对话记录"):
             st.session_state.current_log_filename = None
@@ -134,8 +56,8 @@ def main():
             st.rerun()
 
         if interaction_mode == "多模态模式":
-            model_display = st.selectbox("选择模型", list(MULTIMODAL_MAPPING.keys()), index=1, help="选择模型")
-            model = MULTIMODAL_MAPPING[model_display]
+            model_display = st.selectbox("选择模型", list(VISIONMODAL_MAPPING.keys()), index=1, help="选择模型")
+            model = VISIONMODAL_MAPPING[model_display]
         else:
             model_display = st.selectbox("选择模型", list(MODEL_MAPPING.keys()), index=1, help="选择模型")
             model = MODEL_MAPPING[model_display]
@@ -143,94 +65,16 @@ def main():
         if model not in REASON_MODELS:
             st.session_state.system_prompt = "You are a helpful assistant."
 
-        with st.expander("对话参数", expanded=False):
-            col1, col2 = st.columns(2)
+        ParameterConfiguration()
 
-            with col1:
-                temperature = st.slider("Temperature", 0.0, 2.0, 0.6, 0.1,
-                                        help="控制响应的随机性，值越高表示响应越随机")
-                presence_penalty = st.slider("Presence Penalty", -2.0, 2.0, 0.0, 0.1,
-                                             help="正值会根据新主题惩罚模型，负值会使模型更倾向于重复内容")
-                max_tokens = st.number_input("Max Tokens",
-                                             min_value=1,
-                                             max_value=8192,
-                                             value=4096,
-                                             help="生成文本的最大长度")
-
-            with col2:
-                top_p = st.slider("Top P", 0.0, 1.0, 0.9, 0.1,
-                                  help="控制词汇选择的多样性")
-                frequency_penalty = st.slider("Frequency Penalty", -2.0, 2.0, 0.0, 0.1,
-                                              help="正值会根据文本频率惩罚模型，负值鼓励重复")
-                stream = st.toggle("流式输出", value=True,
-                                   help="启用流式输出可以实时看到生成结果")
-
-        with st.expander("Prompt设置", expanded=False):
-            system_prompt = st.text_area("System Prompt",
-                                         value=st.session_state.system_prompt,
-                                         help="设置AI助手的角色和行为")
-            if st.button("更新System Prompt"):
-                st.session_state.system_prompt = system_prompt
-                st.success("System Prompt已更新")
-
-        with st.expander("文件上传", expanded=False):
-            uploaded_file = st.file_uploader(
-                "上传文件(支持PDF、Word、TxT、CSV)",
-                type=["pdf", "docx", "txt", "csv"],
-                accept_multiple_files=False
+    if interaction_mode == "多模态模式":
+        with st.expander("图片上传", expanded=False):
+            uploaded_image = st.file_uploader(
+                "上传图片",
+                type=["jpg", "jpeg", "png"]
             )
-
-            if uploaded_file:
-                try:
-                    file_content = extract_text(uploaded_file)
-                    if file_content:
-                        st.session_state.file_content = file_content
-                        st.success("文件上传成功！")
-                        st.text_area("文件内容预览",
-                                     value=file_content[:200] + "...",
-                                     height=150)
-                except Exception as e:
-                    st.error(f"文件处理失败: {str(e)}")
-
-            if st.button("清除上传的文件"):
-                st.session_state.file_content = None
-                st.success("文件已清除")
-                st.rerun()
-
-        with st.expander("网络搜索", expanded=False):
-            search_mode = st.selectbox(
-                "选择搜索模式",
-                ["关闭搜索", "文本搜索", "新闻搜索", "图片搜索", "视频搜索"],
-                index=0
-            )
-            st.session_state.search_mode = None if search_mode == "关闭搜索" else search_mode
-
-            if st.session_state.search_mode:
-                st.session_state.search_max_results = st.number_input("最大结果数",
-                                                                      min_value=1,
-                                                                      max_value=5,
-                                                                      value=3,
-                                                                      help="设置最大返回的搜索结果数量")
-
-        if interaction_mode == "多模态模式":
-            with st.expander("图片上传", expanded=False):
-                uploaded_image = st.file_uploader(
-                    "上传图片",
-                    type=["jpg", "jpeg", "png"]
-                )
-                if uploaded_image:
-                    st.image(uploaded_image, caption="图片预览", use_container_width=True)
-
-        with st.expander("Temperature参数使用推荐", expanded=False):
-            st.markdown("""
-            | 场景 | 温度 |
-            |------|------|
-            | 代码生成/数学解题 | 0.0 |
-            | 数据抽取/分析/推理 | 0.6 |
-            | 通用对话 | 0.8 |
-            | 翻译 | 1.0 |
-            | 创意写作/诗歌创作 | 1.3 |
-            """)
+            if uploaded_image:
+                st.image(uploaded_image, caption="图片预览", use_container_width=True)
 
     # 在显示历史消息前添加动态计数器
     msg_counter = st.empty()
@@ -277,39 +121,23 @@ def main():
         # AI响应
         with st.chat_message("assistant"):
             try:
-                def get_system_prompt():
-                    if st.session_state.file_content and st.session_state.search_result:
-                        return generate_combined_prompt(
-                            st.session_state.file_content,
-                            st.session_state.search_result
-                        )
-                    if st.session_state.file_content:
-                        return generate_document_prompt(st.session_state.file_content)
-                    if st.session_state.search_result:
-                        return generate_search_prompt(st.session_state.search_result)
-                    return st.session_state.system_prompt
-
                 messages = [{"role": "system", "content": get_system_prompt()}]
-
-                if interaction_mode == "多模态模式":
-                    base64_image = encode_image_to_base64(uploaded_image)
-                    if base64_image:
-                        messages.append({
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": prompt},
-                                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}},
-                            ],
-                        })
-                    else:
-                        messages.append({"role": "user", "content": prompt})
+                base64_image = encode_image_to_base64(uploaded_image) if uploaded_image else None
+                if base64_image:
+                    messages.append({
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}},
+                        ],
+                    })
                 else:
                     messages.append({"role": "user", "content": prompt})
 
                 messages.extend([{"role": m["role"], "content": m["content"]}
                                  for m in st.session_state.chat_messages])
 
-                if stream:
+                if st.session_state.stream:
                     reason_placeholder = st.empty()
                     message_placeholder = st.empty()
                     content = ""
@@ -318,11 +146,11 @@ def main():
                     for chunk in st.session_state.openai_client.chat.completions.create(
                             model=model,
                             messages=messages,
-                            temperature=temperature,
-                            top_p=top_p,
-                            presence_penalty=presence_penalty,
-                            frequency_penalty=frequency_penalty,
-                            max_tokens=max_tokens,
+                            temperature=st.session_state.temperature,
+                            top_p=st.session_state.top_p,
+                            presence_penalty=st.session_state.presence_penalty,
+                            frequency_penalty=st.session_state.frequency_penalty,
+                            max_tokens=st.session_state.max_tokens,
                             stream=True
                     ):
                         if chunk.choices and len(chunk.choices) > 0:
@@ -345,11 +173,11 @@ def main():
                     response = st.session_state.openai_client.chat.completions.create(
                         model=model,
                         messages=messages,
-                        temperature=temperature,
-                        top_p=top_p,
-                        presence_penalty=presence_penalty,
-                        frequency_penalty=frequency_penalty,
-                        max_tokens=max_tokens,
+                        temperature=st.session_state.temperature,
+                        top_p=st.session_state.top_p,
+                        presence_penalty=st.session_state.presence_penalty,
+                        frequency_penalty=st.session_state.frequency_penalty,
+                        max_tokens=st.session_state.max_tokens,
                         stream=False
                     )
                     reasoning_content = getattr(response.choices[0].message, 'reasoning_content', None)
