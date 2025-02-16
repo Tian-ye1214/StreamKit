@@ -56,29 +56,30 @@ class BackendInteractionLogic:
         st.markdown("### 用户登录")
         username = st.text_input("请输入用户名", key="username_input")
 
-        if st.button("登录/注册"):
-            if username.strip() == "":
-                st.error("用户名不能为空")
-            else:
-                st.session_state.current_user = username
-                if not st.session_state.log_manager.check_user_exists(username):
-                    st.success(f"欢迎 {'新用户'} ")
-                    st.session_state.log_manager.user_register(username)
-
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            if st.button("登录/注册"):
+                if username.strip() == "":
+                    st.error("用户名不能为空")
                 else:
-                    st.success(f"欢迎 {'回来'} {username}！")
+                    st.session_state.current_user = username
+                    if not st.session_state.log_manager.check_user_exists(username):
+                        st.success(f"欢迎 {'新用户'} ")
+                        st.session_state.log_manager.user_register(username)
 
+                    else:
+                        st.success(f"欢迎 {'回来'} {username}！")
         if st.session_state.current_user:
             st.markdown(f"当前用户：**{st.session_state.current_user}**")
-            
-            if st.button("退出登录"):
-                st.session_state.current_user = None
-                st.session_state.chat_messages = []
-                if 'current_log_filename' in st.session_state:
-                    del st.session_state.current_log_filename
-                if 'delete_target' in st.session_state:
-                    del st.session_state.delete_target
-                st.rerun()
+            with col2:
+                    if st.button("退出登录"):
+                        st.session_state.current_user = None
+                        st.session_state.chat_messages = []
+                        if 'current_log_filename' in st.session_state:
+                            del st.session_state.current_log_filename
+                        if 'delete_target' in st.session_state:
+                            del st.session_state.delete_target
+                        st.rerun()
 
             # 历史记录查询
             history_logs = st.session_state.log_manager.get_user_history(st.session_state.current_user)
