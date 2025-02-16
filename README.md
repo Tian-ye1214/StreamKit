@@ -16,3 +16,7 @@
  - pip install -r requirements.txt
  - 配置API_key
  - streamlit run main.py
+### 最近更新（2.16）
+ - 将后端交互逻辑统一，这样可以直接在backend中进行代码更改
+ - 实现复制对话功能
+ - 实现用户登出功能
