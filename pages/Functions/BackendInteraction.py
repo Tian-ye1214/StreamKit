@@ -21,7 +21,8 @@ class BackendInteractionLogic:
         初始化各项参数，保存在session中
         """
         if "openai_client" not in st.session_state:
-            st.session_state.openai_client = OpenAI(api_key='sk-wxmqrirjoqrahuuyxbornwawplaobdlpxjefkzpfgiackdmu', base_url='https://api.siliconflow.cn/v1/')
+            st.session_state.openai_client = OpenAI(api_key='sk-wxmqrirjoqrahuuyxbornwawplaobdlpxjefkzpfgiackdmu',
+                                                    base_url='https://api.siliconflow.cn/v1/')
         if "chat_messages" not in st.session_state:
             st.session_state.chat_messages = []
         if len(st.session_state.chat_messages) > 40:
@@ -55,7 +56,6 @@ class BackendInteractionLogic:
         """
         st.markdown("### 用户登录")
         username = st.text_input("请输入用户名", key="username_input")
-
         col1, col2 = st.columns([1, 1])
         with col1:
             if st.button("登录/注册"):
@@ -72,14 +72,14 @@ class BackendInteractionLogic:
         if st.session_state.current_user:
             st.markdown(f"当前用户：**{st.session_state.current_user}**")
             with col2:
-                    if st.button("退出登录"):
-                        st.session_state.current_user = None
-                        st.session_state.chat_messages = []
-                        if 'current_log_filename' in st.session_state:
-                            del st.session_state.current_log_filename
-                        if 'delete_target' in st.session_state:
-                            del st.session_state.delete_target
-                        st.rerun()
+                if st.button("退出登录"):
+                    st.session_state.current_user = None
+                    st.session_state.chat_messages = []
+                    if 'current_log_filename' in st.session_state:
+                        del st.session_state.current_log_filename
+                    if 'delete_target' in st.session_state:
+                        del st.session_state.delete_target
+                    st.rerun()
 
             # 历史记录查询
             history_logs = st.session_state.log_manager.get_user_history(st.session_state.current_user)
@@ -161,9 +161,9 @@ class BackendInteractionLogic:
 
             with col1:
                 st.session_state.temperature = st.slider("Temperature", 0.0, 2.0, 0.6, 0.1,
-                                                         help="控制响应的随机性，值越高表示响应越随机")
+                                                         help="控制模型回答的多样性，值越高表示回复多样性越高")
                 st.session_state.presence_penalty = st.slider("Presence Penalty", -2.0, 2.0, 0.0, 0.1,
-                                                              help="正值会根据新主题惩罚模型，负值会使模型更倾向于重复内容")
+                                                              help="控制回复主题的多样性性，值越高重复性越低")
                 st.session_state.max_tokens = st.number_input("Max Tokens",
                                                               min_value=1,
                                                               max_value=8192,
@@ -172,9 +172,9 @@ class BackendInteractionLogic:
 
             with col2:
                 st.session_state.top_p = st.slider("Top P", 0.0, 1.0, 0.9, 0.1,
-                                                   help="控制词汇选择的多样性")
+                                                   help="控制词汇选择的多样性,值越高表示潜在生成词汇越多样")
                 st.session_state.frequency_penalty = st.slider("Frequency Penalty", -2.0, 2.0, 0.0, 0.1,
-                                                               help="正值会根据文本频率惩罚模型，负值鼓励重复")
+                                                               help="控制回复中相同词汇重复性，值越高重复性越低")
                 st.session_state.stream = st.toggle("流式输出", value=True,
                                                     help="启用流式输出可以实时看到生成结果")
 
