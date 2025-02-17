@@ -2,7 +2,7 @@ from PIL import Image
 import torch
 import numpy as np
 from transformers import AutoModelForCausalLM
-from janus.models import MultiModalityCausalLM, VLChatProcessor
+from pages.Functions.janus.models import MultiModalityCausalLM, VLChatProcessor
 
 
 @torch.inference_mode()
@@ -11,7 +11,7 @@ def ImageGenerator(
         vl_chat_processor: VLChatProcessor,
         prompt: str,
         temperature: float = 1,
-        parallel_size: int = 16,
+        parallel_size: int = 1,
         cfg_weight: float = 5,
         image_token_num_per_image: int = 576,
         img_size: int = 384,
@@ -61,9 +61,8 @@ def ImageGenerator(
     return [Image.fromarray(visual_img[i]) for i in range(parallel_size)]
 
 
-def mmgeneration(model_path, user_prompt):
+def mmgeneration(model_path, user_prompt, temperature=0.8, cfg_weight=7.5):
     vl_chat_processor: VLChatProcessor = VLChatProcessor.from_pretrained(model_path)
-    tokenizer = vl_chat_processor.tokenizer
 
     vl_gpt: MultiModalityCausalLM = AutoModelForCausalLM.from_pretrained(model_path, trust_remote_code=True)
     vl_gpt = vl_gpt.to(torch.bfloat16).cuda().eval()
@@ -79,5 +78,5 @@ def mmgeneration(model_path, user_prompt):
         system_prompt="",
     )
     prompt = sft_format + vl_chat_processor.image_start_tag
-    image_list = ImageGenerator(vl_gpt, vl_chat_processor, prompt)
+    image_list = ImageGenerator(vl_gpt, vl_chat_processor, prompt, temperature=temperature, cfg_weight=cfg_weight)
     return image_list
