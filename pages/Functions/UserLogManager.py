@@ -9,11 +9,23 @@ class UserLogManager:
         self.base_path = base_path
         os.makedirs(self.base_path, exist_ok=True)
 
+    def _sanitize_name(self, username):
+        # 仅保留数字和大小写字母，移除其他所有字符
+        sanitized = re.sub(r'[^a-zA-Z0-9]', '', username)
+        return sanitized[:50].strip()
+
     def user_register(self, username):
-        os.makedirs(os.path.join(self.base_path, username), exist_ok=True)
+        safe_username = self._sanitize_name(username)
+        user_path = os.path.join(self.base_path, safe_username)
+        # 防止路径遍历
+        user_path = os.path.normpath(user_path)
+        if not user_path.startswith(os.path.abspath(self.base_path)):
+            raise ValueError("非法用户名")
+        os.makedirs(os.path.join(self.base_path, safe_username), exist_ok=True)
 
     def _get_user_path(self, username):
-        return os.path.join(self.base_path, username)
+        safe_username = self._sanitize_name(username)
+        return os.path.join(self.base_path, safe_username)
 
     def check_user_exists(self, username):
         """检查用户是否存在"""
@@ -38,8 +50,7 @@ class UserLogManager:
                 if msg["role"] == "user":
                     first_user_content = msg["content"]
                     break
-            safe_filename = re.sub(r'[\\/*?:"<>|]', "_", first_user_content)
-            safe_filename = safe_filename[:50].strip()
+            safe_filename = self._sanitize_name(first_user_content)
             filename = f"{safe_filename}_{timestamp}.json"
             file_path = os.path.join(user_dir, filename)
 
