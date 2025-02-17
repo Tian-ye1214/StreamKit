@@ -16,11 +16,6 @@ class UserLogManager:
 
     def user_register(self, username):
         safe_username = self._sanitize_name(username)
-        user_path = os.path.join(self.base_path, safe_username)
-        # 防止路径遍历
-        user_path = os.path.normpath(user_path)
-        if not user_path.startswith(os.path.abspath(self.base_path)):
-            raise ValueError("非法用户名")
         os.makedirs(os.path.join(self.base_path, safe_username), exist_ok=True)
 
     def _get_user_path(self, username):
