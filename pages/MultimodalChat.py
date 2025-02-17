@@ -32,7 +32,7 @@ def main():
 
     backend.image_upload()
 
-    if st.session_state.model == "G:/代码/ModelWeight/JanusPro-1B":
+    if st.session_state.model == "deepseek-ai/Janus-Pro-1B":
         with st.expander("Janus工作模式选择", expanded=False):
             st.session_state.janus_mode = st.radio(
                 "",
@@ -81,7 +81,7 @@ def main():
 
         with st.chat_message("assistant"):
             try:
-                if st.session_state.model == "G:/代码/ModelWeight/JanusPro-1B":
+                if st.session_state.model == "deepseek-ai/Janus-Pro-1B":
                     if st.session_state.get('janus_mode', None) == "图片理解模式" and st.session_state.uploaded_image:
                         if st.session_state.uploaded_image:
                             from pages.Functions.MmConversion import mmconversion
