@@ -32,7 +32,7 @@ def main():
 
     backend.image_upload()
 
-    if st.session_state.model == "deepseek-ai/Janus-Pro-1B":
+    if st.session_state.model == "G:/代码/ModelWeight/JanusPro-1B":
         with st.expander("Janus工作模式选择", expanded=False):
             st.session_state.janus_mode = st.radio(
                 "",
@@ -40,6 +40,11 @@ def main():
                 index=0,
                 horizontal=True,
             )
+            if st.session_state.janus_mode == "图片生成模式":
+                st.session_state.JanusTemperature = st.slider("Temperature", 0.0, 2.0, 1.0, 0.1,
+                                                         help="控制画面内容多样性，值越高多样性越高")
+                st.session_state.Janus_cfg_weight = st.slider("cfg_weight", 5.0, 10.0, 7.5, 0.1,
+                                                         help="控制提示词和生成图片的相关性，值越高相关性越高")
         with st.expander("生成图片操作", expanded=False):
             if 'generated_images' in st.session_state:
                 st.markdown("### 生成图片预览")
@@ -76,7 +81,7 @@ def main():
 
         with st.chat_message("assistant"):
             try:
-                if st.session_state.model == "deepseek-ai/Janus-Pro-1B":
+                if st.session_state.model == "G:/代码/ModelWeight/JanusPro-1B":
                     if st.session_state.get('janus_mode', None) == "图片理解模式" and st.session_state.uploaded_image:
                         if st.session_state.uploaded_image:
                             from pages.Functions.MmConversion import mmconversion
@@ -88,7 +93,9 @@ def main():
                             return
                     elif st.session_state.get('janus_mode', None) == "图片生成模式":
                         from pages.Functions.MmGenerator import mmgeneration
-                        generated_images = mmgeneration(st.session_state.model, prompt)
+                        generated_images = mmgeneration(st.session_state.model, prompt,
+                                                        temperature=st.session_state.get('JanusTemperature', 1.0),
+                                                        cfg_weight=st.session_state.get('Janus_cfg_weight', 7.5))
                         if generated_images:
                             st.session_state.generated_images = generated_images  # 存储生成的图片
                             st.rerun()  # 触发页面刷新以显示图片
