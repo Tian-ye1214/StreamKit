@@ -10,8 +10,8 @@ class UserLogManager:
         os.makedirs(self.base_path, exist_ok=True)
 
     def _sanitize_name(self, username):
-        # 仅保留数字和大小写字母，移除其他所有字符
-        sanitized = re.sub(r'[^a-zA-Z0-9]', '', username)
+        # 保留数字、大小写字母和汉字，移除其他所有字符
+        sanitized = re.sub(r'[^a-zA-Z0-9\u4e00-\u9fff]', '', username)
         return sanitized[:50].strip()
 
     def user_register(self, username):
