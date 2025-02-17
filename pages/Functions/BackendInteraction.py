@@ -10,6 +10,7 @@ from pages.Functions.ExtractFileContents import encode_image_to_base64
 from pages.Functions.WebSearch import WebSearch
 from pages.Functions.Constants import SEARCH_METHODS
 from openai import OpenAI
+import re
 
 
 class BackendInteractionLogic:
@@ -62,8 +63,8 @@ class BackendInteractionLogic:
                 if username.strip() == "":
                     st.error("用户名不能为空")
                 else:
-                    if not re.match("^[A-Za-z0-9]+$", username):
-                        st.error("用户名只能包含大小写字母和数字")
+                    if not re.match("^[A-Za-z0-9\u4e00-\u9fff]+$", username):
+                        st.error("用户名只能包含中文、字母和数字")
                     else:
                         st.session_state.current_user = username
                         if not st.session_state.log_manager.check_user_exists(username):
