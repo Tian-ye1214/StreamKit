@@ -19,6 +19,21 @@ VISIONMODAL_MAPPING = {
     "Janus-pro-1B": "deepseek-ai/Janus-Pro-1B",
 }
 
+HIGHSPEED_MODEL_MAPPING = {
+    "GPT-4o-mini": "gpt-4o-mini",
+    "Gemini-2.0-Flash": "gemini-2.0-flash",
+    "Gemini-2.0-Lite": "gemini-2.0-flash-lite-preview-02-05",
+    "智谱清言": "glm-4-flashx",
+    "百川智能": "Baichuan4-Air",
+    "豆包": "Doubao-pro-32k",
+}
+
+EMBEDDING_MODEL_MAPPING = {
+    "BGE-M3": "Pro/BAAI/bge-m3",
+    "BGE-large-中文": "BAAI/bge-large-zh-v1.5",
+    "BGE-large-英文": "BAAI/bge-large-en-v1.5",
+}
+
 
 # 免费模型
 FREE_MODEL_MAPPING = {
