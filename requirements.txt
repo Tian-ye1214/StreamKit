@@ -5,3 +5,17 @@ pandas
 python-docx 
 duckduckgo_search
 
+networkx
+pyvis
+aiohttp
+configparser
+future
+
+numpy
+pipmaster
+pydantic
+python-dotenv
+
+tenacity
+tiktoken
+
