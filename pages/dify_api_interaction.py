@@ -37,7 +37,6 @@ if st.sidebar.button("提交请求"):
         initial_message = st.info("程序正在运行，请耐心等待...")
         response_placeholder = st.empty()
         status_placeholder = st.empty()
-        image_placeholder = st.empty()
         
         full_response = ""
         workflow_status = "处理中..."
@@ -65,11 +64,10 @@ if st.sidebar.button("提交请求"):
                                             node_status = json_data.get('data', {}).get('status', '未知')
                                             outputs = json_data.get('data', {}).get('outputs', {})
                                             if outputs:
-                                                if 'text' in outputs:
-                                                    text_content = outputs.get('text', '')
-                                                    if text_content:
-                                                        full_response = text_content
-                                                        response_placeholder.markdown(full_response)
+                                                text_content = outputs.get('text', '')
+                                                if text_content:
+                                                    full_response = text_content
+                                                    response_placeholder.markdown(full_response)
                                             
                                             status_placeholder.info(f"节点 '{node_title}' 处理完成，状态: {node_status}")
                                         elif event_type == 'workflow_finished':
@@ -77,34 +75,12 @@ if st.sidebar.button("提交请求"):
                                             elapsed_time = json_data.get('data', {}).get('elapsed_time', 0)
                                             outputs = json_data.get('data', {}).get('outputs', {})
                                             if outputs:
-                                                try:
-                                                    if isinstance(outputs, str):
-                                                        try:
-                                                            parsed_output = json.loads(outputs)
-                                                            if 'output' in parsed_output:
-                                                                text_content = parsed_output.get('output', '')
-                                                                if text_content:
-                                                                    full_response = text_content
-                                                                    response_placeholder.markdown(full_response)
+                                                text_content = outputs.get('text', '')
+                                                if text_content:
+                                                    full_response = text_content
+                                                    response_placeholder.markdown(full_response)
 
-                                                        except json.JSONDecodeError:
-                                                            full_response = outputs
-                                                            response_placeholder.markdown(full_response)
-                                                    else:
-                                                        if 'text' in outputs:
-                                                            text_content = outputs.get('text', '')
-                                                            if text_content:
-                                                                full_response = text_content
-                                                                response_placeholder.markdown(full_response)
-                                                except Exception as parse_error:
-                                                    st.error(f"解析输出错误: {str(parse_error)}")
-                                                    st.code(outputs)
-                                            
                                             status_placeholder.success(f"工作流处理完成! 状态: {workflow_status}, 耗时: {elapsed_time:.2f}秒")
-                                        elif event_type == 'message':
-                                            message = json_data.get('data', {}).get('message', '')
-                                            full_response += message
-                                            response_placeholder.markdown(full_response)
                                     except json.JSONDecodeError:
                                         st.error(f"无法解析 JSON: {json_str}")
                 else:
@@ -112,7 +88,6 @@ if st.sidebar.button("提交请求"):
                     st.code(response.text)
         except Exception as e:
             st.error(f"发生错误: {str(e)}")
-
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("[在线访问 Dify 应用](https://udify.app/workflow/IvKSTMs6nut4Y1FC)")
