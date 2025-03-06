@@ -43,7 +43,6 @@ def display_pdf(file, prefix=""):
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     total_pages = doc.page_count
     
-    # 修改滑块逻辑，处理只有一页的情况
     if total_pages <= 1:
         page_number = 0
         if total_pages == 1:
@@ -136,7 +135,7 @@ def main():
             min_value=1,
             max_value=8,
             value=4,
-            help="受限于Streamlit Cloud服务端，目前仅支持单线程翻译"
+            help="翻译时调用线程数"
         )
 
         if uploaded_file:
