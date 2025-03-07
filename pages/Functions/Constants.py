@@ -2,7 +2,7 @@
 MODEL_MAPPING = {
     "DeepSeek-v3": "Pro/deepseek-ai/DeepSeek-V3",
     "DeepSeek-R1": "Pro/deepseek-ai/DeepSeek-R1",
-    "QwQ": "Qwen/QwQ-32B",
+    "QwQ-32B": "Qwen/QwQ-32B",
     "R1-Distill-Qwen-32B": "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B",
     "R1-Distill-Qwen-14B": "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B",
     "R1-Distill-Qwen-7B": "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
