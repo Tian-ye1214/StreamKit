@@ -2,12 +2,12 @@
 MODEL_MAPPING = {
     "DeepSeek-v3": "Pro/deepseek-ai/DeepSeek-V3",
     "DeepSeek-R1": "Pro/deepseek-ai/DeepSeek-R1",
-    "R1-Distill-Llama-70B": "deepseek-ai/DeepSeek-R1-Distill-Llama-70B",
+    "QwQ": "Qwen/QwQ-32B",
     "R1-Distill-Qwen-32B": "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B",
     "R1-Distill-Qwen-14B": "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B",
     "R1-Distill-Qwen-7B": "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
-    "QwQ": "Qwen/QwQ-32B-Preview",
     "Qwen2.5-72B": "Qwen/Qwen2.5-72B-Instruct-128K",
+    "Qwen2.5-32B": "Qwen/Qwen2.5-32B-Instruct",
 }
 
 VISIONMODAL_MAPPING = {
