@@ -9,13 +9,15 @@ from pages.Functions.UserLogManager import UserLogManager
 from pages.Functions.ExtractFileContents import encode_image_to_base64
 from pages.Functions.WebSearch import WebSearch
 from pages.Functions.Constants import SEARCH_METHODS
+from pages.Functions.js.background import particles
 from openai import OpenAI
 import re
 
 
 class BackendInteractionLogic:
     def __init__(self):
-        pass
+        # particles()
+        self.Placeholder = 'Hi, this is a placeholder'
 
     def initialize_session_state(self):
         """
