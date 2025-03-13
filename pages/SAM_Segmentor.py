@@ -1,7 +1,7 @@
 import streamlit as st
 from streamlit_image_coordinates import streamlit_image_coordinates
 import numpy as np
-from SAM2_1.SAM import SAM2Segment
+from pages.SAM2_1.SAM import SAM2Segment
 from PIL import Image
 
 st.markdown("""
