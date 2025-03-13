@@ -4,6 +4,8 @@ pymupdf
 pandas
 python-docx 
 duckduckgo_search
+streamlit_image_coordinates
+pdf2zh
 
 networkx
 pyvis
