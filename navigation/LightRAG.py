@@ -18,7 +18,7 @@ async def llm_model_func(prompt, system_prompt=None, history_messages=[], **kwar
         prompt,
         system_prompt=system_prompt,
         history_messages=history_messages,
-        api_key="sk-zk2c8dbca788267f51a5504a1ee33f6ed7467beba6872fc6",
+        api_key="sk-zk2b5ec70696b85575d06ae5d048c312c0967b71ab8c425f",
         base_url="https://api.zhizengzeng.com/v1",
         **kwargs,
     )
@@ -90,20 +90,15 @@ def load_knowledge_graph(graph_path, show_isolated=False):
                 edge["title"] = edge["description"]
             edge["width"] = 2
 
-        temp_path = _save_graph_to_temp(net)
+        temp_dir = tempfile.gettempdir()
+        temp_path = os.path.join(temp_dir, f'graph_{random.randint(0, 999999)}.html')
+        net.show(temp_path)
         html_content = _load_temp_graph(temp_path)
 
         return html_content
     except Exception as e:
         st.warning(f"知识图谱显示失败: {str(e)}")
         return None
-
-
-def _save_graph_to_temp(net):
-    temp_dir = tempfile.gettempdir()
-    temp_path = os.path.join(temp_dir, f'graph_{random.randint(0, 999999)}.html')
-    net.show(temp_path)
-    return temp_path
 
 
 def _load_temp_graph(temp_path):
