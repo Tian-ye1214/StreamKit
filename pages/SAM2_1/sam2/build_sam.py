@@ -12,7 +12,7 @@ from hydra import compose
 from hydra.utils import instantiate
 from omegaconf import OmegaConf
 
-import sam2
+import pages.SAM2_1.sam2 as sam2
 
 # Check if the user is running Python from the parent directory of the sam2 repo
 # (i.e. the directory where this repo is cloned into) -- this is not supported since
