@@ -82,7 +82,7 @@ def initialization():
     if "current_marker" not in st.session_state:
         st.session_state.current_marker = 1
     if "SAM2" not in st.session_state:
-        sam2_checkpoint = "./SAM2_1/checkpoints/sam2.1_hiera_base_plus.pt"
+        sam2_checkpoint = "./pages/SAM2_1/checkpoints/sam2.1_hiera_base_plus.pt"
         model_cfg = "configs/sam2.1/sam2.1_hiera_b+.yaml"
         st.session_state.SAM2 = SAM2Segment(sam2_checkpoint, model_cfg)
         st.session_state.input_point = []
