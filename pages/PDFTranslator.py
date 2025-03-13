@@ -25,7 +25,7 @@ def translate_pdf(file, lang_in="en", lang_out="zh", service="google", thread=4,
             lang_out=lang_out,
             service=service,
             thread=thread,
-            model=OnnxModel(),
+            model=OnnxModel('pages/ModelCheckpoint/doclayout_yolo_docstructbench_imgsz1024.onnx'),
         )
         return stream_mono, stream_dual
     except Exception as e:
