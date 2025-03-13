@@ -63,6 +63,11 @@ def main():
             st.session_state.system_prompt = "You are a helpful assistant."
 
         backend.parameter_configuration()
+        st.sidebar.markdown("联系作者")
+        st.markdown(f"""
+        📧 [Z1092228927@outlook.com](mailto:Z1092228927@outlook.com)<br>
+        🐱 [Tian-ye1214](https://github.com/Tian-ye1214)
+        """, unsafe_allow_html=True)
 
     for message in st.session_state.chat_messages:
         with st.chat_message(message["role"]):
