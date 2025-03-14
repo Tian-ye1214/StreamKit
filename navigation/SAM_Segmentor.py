@@ -4,6 +4,8 @@ from streamlit_image_coordinates import streamlit_image_coordinates
 import numpy as np
 from pages.SAM2_1.SAM import SAM2Segment
 from PIL import Image
+import os
+import sys
 
 st.markdown("""
 <style>
@@ -83,6 +85,10 @@ def initialization():
     if "current_marker" not in st.session_state:
         st.session_state.current_marker = 1
     if "SAM2" not in st.session_state:
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        sam2_module_path = os.path.join(base_dir, "pages/SAM2_1")
+        if sam2_module_path not in sys.path:
+            sys.path.append(sam2_module_path)
         sam2_checkpoint = "./pages/SAM2_1/checkpoints/sam2.1_hiera_base_plus.pt"
         model_cfg = "configs/sam2.1/sam2.1_hiera_b+.yaml"
         st.session_state.SAM2 = SAM2Segment(sam2_checkpoint, model_cfg)
