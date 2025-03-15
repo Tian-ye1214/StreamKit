@@ -136,6 +136,8 @@ def main():
     with st.expander("使用说明", expanded=False):
         st.markdown("""
         🌟 **点触之间，精准分离万物** 🌟
+        
+        **源项目地址**：https://github.com/facebookresearch/sam2
 
         🧰 **操作指南**：
         
