@@ -12,6 +12,7 @@ from pages.Functions.Constants import SEARCH_METHODS
 from pages.Functions.js.background import particles
 from openai import OpenAI
 import re
+import os
 
 
 class BackendInteractionLogic:
@@ -24,8 +25,8 @@ class BackendInteractionLogic:
         初始化各项参数，保存在session中
         """
         if "openai_client" not in st.session_state:
-            st.session_state.openai_client = OpenAI(api_key='sk-wxmqrirjoqrahuuyxbornwawplaobdlpxjefkzpfgiackdmu',
-                                                    base_url='https://api.siliconflow.cn/v1/')
+            st.session_state.openai_client = OpenAI(api_key=os.environ.get('SiliconFlow_API_KEY'),
+                                                    base_url=os.environ.get('SiliconFlow_URL'))
         if "chat_messages" not in st.session_state:
             st.session_state.chat_messages = []
         if len(st.session_state.chat_messages) > 40:
@@ -309,7 +310,7 @@ class BackendInteractionLogic:
                     if getattr(delta, 'reasoning_content', None):
                         reasoning_content += delta.reasoning_content
                         reason_placeholder.markdown(
-                            f"<div style='background:#f0f0f0; border-radius:5px; padding:10px; margin-bottom:10px; font-size:14px;'>"
+                            f"<div style='background:#333333; border-radius:5px; padding:10px; margin-bottom:10px; font-size:14px;'>"
                             f"🤔 {reasoning_content}</div>",
                             unsafe_allow_html=True
                         )
@@ -337,7 +338,7 @@ class BackendInteractionLogic:
 
             if reasoning_content:
                 st.markdown(
-                    f"<div style='background:#f0f0f0; border-radius:5px; padding:10px; margin-bottom:10px; font-size:14px;'>"
+                    f"<div style='background:#333333; border-radius:5px; padding:10px; margin-bottom:10px; font-size:14px;'>"
                     f"🤔 {reasoning_content}</div>",
                     unsafe_allow_html=True
                 )
