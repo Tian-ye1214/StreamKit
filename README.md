@@ -1,22 +1,19 @@
-# Reason Model 交互平台
+# 这是一个Streamlit拼好网
 
-基于 Streamlit 构建的多功能 AI 对话应用，支持API调用、文件分析、网络搜索和对话历史管理。
+啥东西都沾点的WebUI项目
 
 ## 主要功能
 
-- 文件分析：支持上传并分析 PDF、Word、TXT、CSV 等格式文件
-- 网络搜索：支持文本、新闻、图片、视频等多种搜索模式
-- 图片理解：支持上传图片进行多模态对话（仅支持多模态模型）
-- 对话历史：支持保存和加载历史对话记录
-- 用户系统：支持用户注册和登录
-- 参数配置：支持自定义 Temperature、Top P 等模型参数
-- 实时对话：支持流式输出对话内容
+- AI交互：支持多模态、参数调整，文件上传、网络搜索等
+- Dify交互：和Dify工作流交互
+- 保持PDF排版格式的翻译
+- 基于知识图谱的RAG
+- SAM2.1语义分割
 
 ### 快速开始
+
  - pip install -r requirements.txt
- - 配置API_key
+ - 在.env中配置API_key
+ - 下载doclayout_yolo_docstructbench_imgsz1024模型放入pages/ModelCheckpoint中
+ - 下载SAM2.1模型放入pages/SAM2_1/checkpoints中
  - streamlit run main.py
-### 最近更新（2.16）
- - 将后端交互逻辑统一，这样可以直接在backend中进行代码更改
- - 实现复制对话功能
- - 实现用户登出功能
