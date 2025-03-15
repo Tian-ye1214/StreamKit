@@ -21,3 +21,5 @@ python-dotenv
 tenacity
 tiktoken
 
+git+https://github.com/facebookresearch/sam2.git
+
