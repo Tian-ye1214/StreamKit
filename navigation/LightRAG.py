@@ -18,8 +18,8 @@ async def llm_model_func(prompt, system_prompt=None, history_messages=[], **kwar
         prompt,
         system_prompt=system_prompt,
         history_messages=history_messages,
-        api_key="sk-zk2b5ec70696b85575d06ae5d048c312c0967b71ab8c425f",
-        base_url="https://api.zhizengzeng.com/v1",
+        api_key=os.environ.get('ZhiZz_API_KEY'),
+        base_url=os.environ.get('ZhiZz_URL'),
         **kwargs,
     )
 
@@ -28,8 +28,8 @@ async def embedding_func(texts: list[str]):
     return await openai_embed(
         texts,
         model=st.session_state.embedding_model,
-        api_key="sk-wxmqrirjoqrahuuyxbornwawplaobdlpxjefkzpfgiackdmu",
-        base_url="https://api.siliconflow.cn/v1/",
+        api_key=os.environ.get('SiliconFlow_API_KEY'),
+        base_url=os.environ.get('SiliconFlow_URL'),
     )
 
 
@@ -190,11 +190,12 @@ def _process_uploaded_file(uploaded_file):
 
 
 def main():
-    st.set_page_config(layout="wide")
     st.title("LightRAG - 基于知识图谱的检索增强生成系统")
     with st.expander("使用说明", expanded=False):
         st.markdown("""
         🌟 **开启增强检索新时代** 🌟
+        
+        ✅ **源项目地址**：https://github.com/HKUDS/LightRAG
 
         🧩 **系统亮点**：
         
