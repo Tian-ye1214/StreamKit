@@ -13,6 +13,7 @@ from pages.Functions.js.background import particles
 from openai import OpenAI
 import re
 import os
+from PIL import Image
 
 
 class BackendInteractionLogic:
@@ -152,7 +153,16 @@ class BackendInteractionLogic:
                 type=["jpg", "jpeg", "png"]
             )
             if st.session_state.uploaded_image:
-                st.image(st.session_state.uploaded_image, caption="图片预览", use_container_width=True)
+                image = Image.open(st.session_state.uploaded_image)
+                width, height = image.size
+                if width > 512 or height > 512:
+                    scale = 512 / max(height, width)
+                    new_h, new_w = int(height * scale), int(width * scale)
+                    resized_img = image.resize((new_w, new_h), Image.BILINEAR)
+                    st.session_state.processed_image = resized_img
+                else:
+                    st.session_state.processed_image = image
+                st.image(st.session_state.processed_image, caption="图片预览", use_container_width=True)
 
     def start_new_conversation(self):
         if st.button("开启新对话", help="开启新对话将清空当前对话记录"):
