@@ -107,15 +107,14 @@ def resize_image_if_needed(image):
     if image is None:
         return None
 
-    h, w = image.shape[:2]
+    h, w = image.size[1], image.size[0]
     max_size = 1024
 
     if h > max_size or w > max_size:
         scale = max_size / max(h, w)
         new_h, new_w = int(h * scale), int(w * scale)
 
-        pil_img = Image.fromarray(image)
-        resized_img = pil_img.resize((new_w, new_h), Image.BILINEAR)
+        resized_img = image.resize((new_w, new_h), Image.BILINEAR)
 
         st.info(f"图像已从 {w}x{h} 调整为 {new_w}x{new_h} 以获得最佳性能")
         return np.array(resized_img)
@@ -168,7 +167,7 @@ def main():
             st.session_state.latest_masks = []
             st.session_state.previous_file_hash = current_file_hash
 
-        st.session_state.current_image = resize_image_if_needed(np.array(Image.open(uploaded_file).convert("RGB")))
+        st.session_state.current_image = resize_image_if_needed(Image.open(uploaded_file).convert("RGB"))
 
     if st.session_state.current_image is not None:
         if st.session_state.latest_masks:
