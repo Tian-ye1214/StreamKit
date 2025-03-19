@@ -158,14 +158,12 @@ class BackendInteractionLogic:
                 if width > 512 or height > 512:
                     scale = 512 / max(height, width)
                     new_h, new_w = int(height * scale), int(width * scale)
-                    resized_img = image.resize((new_w, new_h), Image.BILINEAR)
-                    st.session_state.processed_image = resized_img
-                else:
-                    st.session_state.processed_image = image
-                st.image(st.session_state.processed_image, caption="图片预览", use_container_width=True)
+                    image = image.resize((new_w, new_h), Image.BILINEAR)
+                st.image(image, caption="图片预览", use_container_width=True)
 
     def start_new_conversation(self):
         if st.button("开启新对话", help="开启新对话将清空当前对话记录"):
+            st.session_state.uploaded_image = None
             st.session_state.current_log_filename = None
             st.session_state.chat_messages = []
             st.success("已成功开启新的对话")
