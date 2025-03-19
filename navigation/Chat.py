@@ -80,6 +80,7 @@ def main():
         # AI响应
         with st.chat_message("assistant"):
             try:
+                st.session_state.uploaded_image = None
                 backend.ai_generation()
             except Exception as e:
                 st.error(f"生成回答时出错: {str(e)}")
