@@ -13,28 +13,38 @@ lora_path = "/home/li/桌面/ComfyUI/models/loras"
 sdxl_path = "/home/li/桌面/datasets_and_models/stable-diffusion-xl-base-1.0/sd_xl_base_1.0.safetensors"
 
 lora_mapping = {
+    "古建筑-正面": "Front_Building.safetensors",
     "3D渲染": "3Disometric_rendering.safetensors",
     "现代建筑渲染": "Architecture_rendering.safetensors",
-    "轴测图Axonometric": "Axonometric_drawing.safetensors ",
-    "概念草图": "Concept_sketch.safetensors ",
+    "轴测图Axonometric": "Axonometric_drawing.safetensors",
+    "概念草图": "Concept_sketch.safetensors",
     "未来风格": "Futuristics.safetensors",
     "插画风格": "Illustration.safetensors",
     "日本动漫风格": "Japanese_anime.safetensors",
-    "白雪石": "baixueshi.safetensors ",
+    "白雪石": "baixueshi.safetensors",
     "毕加索": "Camille Pissarro.safetensors", 
     "华岩": "huayan.safetensors",
-    "梵高": "vg-webui.safetensors"
+    "梵高": "vg-webui.safetensors",
+    "山水画": "aligned_ancient_style.safetensors",
+    "石涛": "shitao.safetensors",
+    "宋徽宗": "songhuizong.safetensors"
 }
 
 def diffusion_generation(model,prompt,height,width,num_inference_steps,guidance_scale,batch_size,lora=None):
     if model == "SDXL":
         pipe = StableDiffusionXLPipeline.from_single_file(sdxl_path, torch_dtype=torch.float16)
-        if lora is not None:
+        if isinstance(lora, str) and lora is not None:
             lora_safetensors_path = os.path.join(lora_path,lora_mapping[lora])
             pipe.load_lora_weights(lora_safetensors_path)
+        if isinstance(lora,list) and lora is not None:
+            lora_scales=[0.9,0.7]
+            for (x,scale) in zip(lora,lora_scales):
+                lora_safetensors_path = os.path.join(lora_path,lora_mapping[x])
+                pipe.load_lora_weights(lora_safetensors_path)
+                pipe.fuse_lora(lora_scale = scale)
         pipe = pipe.to("cuda")
         image = pipe(prompt,height=height,width=width,num_inference_steps=num_inference_steps,guidance_scale=guidance_scale,batch_size=batch_size).images[0]
-        st.image(image)
+        st.image(image,width=512)
         return image
 
 def flux_generation(model_name, prompt, width, height):
@@ -92,14 +102,12 @@ def main():
         st.subheader("选择模型")
         model = st.selectbox(
             "模型",
-            # options=["FLUX","SDXL"],
-            options=["FLUX"],
+            options=["FLUX","SDXL"],
+            # options=["FLUX"],
             help="选择图像生成模型"
         )
         if model != st.session_state.img_model:
             st.session_state.img_model = model
-        
-        st.divider()
         
         st.subheader("配置参数")
         col1, col2 = st.columns(2)
@@ -107,19 +115,20 @@ def main():
             width = st.number_input(
                 label = '图像宽度',
                 min_value=0, 
-                max_value=1024, 
-                value=512, 
+                max_value=1536, 
+                value=1024, 
                 step=1, 
                 help='请输入图像宽度'
             )
             if model == "SDXL":
-                batch_size = st.number_input(
-                    label = 'batch size',
-                    min_value=1, 
-                    max_value=4, 
-                    value=1, 
-                    step=1
-                )
+                # batch_size = st.number_input(
+                #     label = 'batch size',
+                #     min_value=1, 
+                #     max_value=4, 
+                #     value=1, 
+                #     step=1
+                # )
+
                 num_inference_steps = st.number_input(
                     label = 'inference steps',
                     min_value=0, 
@@ -133,7 +142,7 @@ def main():
                 label = '图像高度',
                 min_value=0, 
                 max_value=1024, 
-                value=512, 
+                value=1024, 
                 step=1, 
                 help='请输入图像高度'
             )
@@ -142,30 +151,34 @@ def main():
                 # sampler = st.selectbox("采样器")
             
         if model == "SDXL":
+            st.subheader("选择风格lora")
             genre = st.radio(
                 "选择风格lora",
-                ["建筑风格", "绘画风格", "自定义训练风格"],
+                ["无","建筑风格", "自定义训练风格"],
                 captions=[
-                    "七种建筑风格",
-                    "作家经典风格",
-                    "山水画&梵高",
+                    "SDXL基础模型",
+                    "古建筑+七种常见建筑风格",
+                    "梵高&山水画",
                 ],
+                label_visibility="hidden"
             )
-            st.divider()
             
             if genre == "建筑风格":
-                lora = st.selectbox(
+                lora = st.multiselect(
                     "建筑风格",
-                    options=["3D渲染","现代建筑渲染","轴测图Axonometric","概念草图","未来风格","插画风格","日本动漫风格"],
-                    index = 5
+                    options=["古建筑-正面","3D渲染","现代建筑渲染","轴测图Axonometric","概念草图","未来风格","插画风格","日本动漫风格"],
+                    default=["古建筑-正面","日本动漫风格"],
+                    max_selections = 2
                 )
+                st.session_state.lora = lora
 
-            if genre == "绘画风格":
-                lora = st.selectbox(
-                    "绘画风格",
-                    options=["白雪石", "毕加索", "华岩"],
-                    index = 0
-                )
+            # if genre == "绘画风格":
+            #     lora = st.selectbox(
+            #         "绘画风格",
+            #         options=["石涛","白雪石","华岩"],
+            #         index = 0
+            #     )
+            #     st.session_state.lora = lora
 
             if genre == "自定义训练风格":
                 lora = st.selectbox(
@@ -173,6 +186,7 @@ def main():
                     options=["梵高", "山水画"],
                     index = 0
                 )
+                st.session_state.lora = lora
 
         if model == "FLUX":
             st.subheader("选择类型")
@@ -182,11 +196,9 @@ def main():
                 index=2
             )
             
-        # if lora != st.session_state.lora:
-        #     st.session_state.lora = lora
        
     #主界面
-    prompt = st.text_area("positive prompt",max_chars=60, placeholder="请输入提示词")
+    prompt = st.text_area("positive prompt",max_chars=500, placeholder="请输入提示词")
     # negative_prompt = st.text_area("negative prompt",max_chars=60, placeholder="请输入反向提示词")
     
     
@@ -202,8 +214,8 @@ def main():
                         width=width,
                         num_inference_steps=num_inference_steps,
                         guidance_scale=guidance_scale,
-                        batch_size=batch_size,
-                        lora=lora if lora else None
+                        batch_size=1,
+                        lora=st.session_state.lora
                         )
                 if model == "FLUX":
                     img_url = flux_generation(model_name, prompt, width, height)
@@ -213,6 +225,7 @@ def main():
                 #     label="下载图片",
                 #     data=image,
                 #     file_name="img.png",
+                #     mime="image/jpeg",
                 #     use_container_width=True
                 # )
         else:
