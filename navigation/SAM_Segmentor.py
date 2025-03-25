@@ -7,6 +7,7 @@ from PIL import Image
 import os
 import sys
 import io
+import cv2
 
 st.markdown("""
 <style>
@@ -81,9 +82,12 @@ st.markdown("""
 def initialization():
     if "clicks" not in st.session_state:
         st.session_state.clicks = []
+    if "mask_image" not in st.session_state:
+        st.session_state.mask_image = None
+        st.session_state.combine_image = None
     if "current_image" not in st.session_state:
         st.session_state.current_image = None
-        st.session_state.latest_masks = []
+        st.session_state.latest_masks = None
     if "current_marker" not in st.session_state:
         st.session_state.current_marker = 1
     if "SAM2" not in st.session_state:
@@ -96,13 +100,11 @@ def initialization():
         st.session_state.SAM2 = SAM2Segment(sam2_checkpoint, model_cfg)
         st.session_state.input_point = []
         st.session_state.input_label = []
-    if "display_image" not in st.session_state:
-        st.session_state.display_image = None
 
 
 def resize_image_if_needed(image):
     """
-    如果图像尺寸超过1024x1024，则使用双线性插值调整大小
+    如果图像尺寸过大，则使用双线性插值调整大小
     """
     if image is None:
         return None
@@ -119,7 +121,7 @@ def resize_image_if_needed(image):
         st.info(f"图像已从 {w}x{h} 调整为 {new_w}x{new_h} 以获得最佳性能")
         return np.array(resized_img)
 
-    return image
+    return np.array(image)
 
 
 def main():
@@ -164,123 +166,148 @@ def main():
             st.session_state.clicks = []
             st.session_state.input_point = []
             st.session_state.input_label = []
-            st.session_state.latest_masks = []
+            st.session_state.latest_masks = None
+            st.session_state.mask_image = None
+            st.session_state.combine_image = None
             st.session_state.previous_file_hash = current_file_hash
 
         st.session_state.current_image = resize_image_if_needed(Image.open(uploaded_file).convert("RGB"))
 
-    if st.session_state.current_image is not None:
-        if st.session_state.latest_masks:
-            latest_mask = np.array(st.session_state.latest_masks)
-            masked_image = st.session_state.SAM2.show_mask(latest_mask, image=st.session_state.current_image)
-        else:
-            masked_image = st.session_state.current_image.copy()
+    tab1, tab2 = st.tabs(['Point inference', 'Auto Masks Generation'])
+    with tab1:
+        if st.session_state.current_image is not None:
+            if st.session_state.latest_masks is not None:
+                masked_image = st.session_state.SAM2.show_mask(st.session_state.latest_masks,
+                                                               image=st.session_state.current_image)
+            else:
+                masked_image = st.session_state.current_image
+            display_image = st.session_state.SAM2.show_points(masked_image, st.session_state.clicks)
+            try:
+                coords = streamlit_image_coordinates(
+                    display_image,
+                    key="image",
+                    height=display_image.shape[0],
+                    use_column_width=False,
+                    click_and_drag=False
+                )
+                if coords and coords != st.session_state.get("last_coord"):
+                    h, w = st.session_state.current_image.shape[:2]
 
-        display_image = st.session_state.SAM2.show_points(masked_image, st.session_state.clicks)
-        st.session_state.display_image = display_image
+                    actual_x = int(coords["x"])
+                    actual_y = int(coords["y"])
 
-        try:
-            coords = streamlit_image_coordinates(
-                display_image,
-                key="image",
-                height=display_image.shape[0],
-                use_column_width=False,
-                click_and_drag=False
-            )
-            if coords and coords != st.session_state.get("last_coord"):
-                h, w = st.session_state.current_image.shape[:2]
+                    actual_x = max(0, min(w - 1, actual_x))
+                    actual_y = max(0, min(h - 1, actual_y))
 
-                actual_x = int(coords["x"])
-                actual_y = int(coords["y"])
+                    click_data = {
+                        "x": actual_x,
+                        "y": actual_y,
+                        "marker": st.session_state.current_marker
+                    }
+                    st.session_state.input_point.append([actual_x, actual_y])
+                    st.session_state.input_label.append(st.session_state.current_marker)
 
-                actual_x = max(0, min(w - 1, actual_x))
-                actual_y = max(0, min(h - 1, actual_y))
+                    masks = st.session_state.SAM2.point_inference(st.session_state.current_image,
+                                                                  np.array(st.session_state.input_point),
+                                                                  np.array(st.session_state.input_label))
+                    st.session_state.latest_masks = (masks[0] * 255)
+                    st.session_state.masks_image = Image.fromarray(st.session_state.latest_masks.astype(np.uint8))
+                    st.session_state.combine_image = Image.fromarray(
+                        st.session_state.SAM2.show_mask(
+                        st.session_state.latest_masks, image=st.session_state.current_image
+                        )
+                    )
+                    if click_data not in st.session_state.clicks:
+                        st.session_state.clicks.append(click_data)
+                        st.session_state.last_coord = coords
+                        st.rerun()
+            except KeyError as e:
+                st.error(f"生成分割内容出错: {str(e)}")
 
-                click_data = {
-                    "x": actual_x,
-                    "y": actual_y,
-                    "marker": st.session_state.current_marker
-                }
-                st.session_state.input_point.append([actual_x, actual_y])
-                st.session_state.input_label.append(st.session_state.current_marker)
+    with tab2:
+        auto_masks = None
+        if st.session_state.current_image is not None:
+            st.markdown("### 自动掩码生成")
+            if st.session_state.combine_image is not None:
+                st.image(st.session_state.combine_image, use_container_width=True, caption="分割图像")
+            else:
+                st.image(st.session_state.current_image, use_container_width=True, caption="原始图像")
 
-                masks = st.session_state.SAM2.point_inference(st.session_state.current_image,
-                                                              np.array(st.session_state.input_point),
-                                                              np.array(st.session_state.input_label))
-                st.session_state.latest_masks = Image.fromarray(masks[0]).convert("L")
-                if click_data not in st.session_state.clicks:
-                    st.session_state.clicks.append(click_data)
-                    st.session_state.last_coord = coords
-                    st.rerun()
-        except KeyError as e:
-            st.error(f"生成分割内容出错: {str(e)}")
+            if st.button("生成全图掩码", help="自动生成全图所有物体的掩码"):
+                with st.spinner("正在生成全图掩码..."):
+                    auto_masks = st.session_state.SAM2.auto_mask_genarator(st.session_state.current_image)
 
-        with st.sidebar:
-            marker_type = st.radio(
-                "标记类型",
-                ["我想要的区域(1)", "我不想要的区域(0)"],
-                index=0 if st.session_state.current_marker == 1 else 1,
-                key="marker_selector"
-            )
-            st.session_state.current_marker = 1 if "1" in marker_type else 0
-            st.markdown("""
-                <div class="coordinates-box">
-                    <h3>📌 坐标信息</h3>
-                    <p>最新坐标：<br><strong style="color:#4CAF50">({x}, {y})</strong></p>
-                    <p>当前标记：<strong style="color:{color}">[{marker}] {type}</strong></p>
-                    <div class="history-list">
-                        <p>📚 历史记录（最近10条）：</p>
-                        {history}
-                    </div>
-                </div>
-                """.format(
-                x=st.session_state.clicks[-1]["x"] if st.session_state.clicks else "N/A",
-                y=st.session_state.clicks[-1]["y"] if st.session_state.clicks else "N/A",
-                marker=st.session_state.current_marker,
-                color="#4CAF50" if st.session_state.current_marker == 1 else "#f44336",
-                type=marker_type,
-                history="\n".join([
-                    f'<div class="history-item" style="color: {"#4CAF50" if c["marker"] == 1 else "#f44336"}">'
-                    f'→ ({c["x"]}, {c["y"]}) <small>[{c["marker"]}]</small></div>'
-                    for c in reversed(st.session_state.clicks[-10:])
-                ])
-            ), unsafe_allow_html=True)
-            if st.button("清除所有记录"):
-                st.session_state.clicks = []
-                st.session_state.input_point = []
-                st.session_state.input_label = []
-                st.session_state.latest_masks = None
+            if auto_masks is not None:
+                combined_mask = st.session_state.SAM2.show_masks(st.session_state.current_image, auto_masks)
+                st.session_state.masks_image = Image.fromarray(combined_mask)
+                blended = cv2.addWeighted(st.session_state.current_image, 0.8,
+                                          combined_mask[..., :3], 0.8, 0)
+                st.session_state.combine_image = Image.fromarray(blended)
                 st.rerun()
 
-            if st.session_state.latest_masks:
-                st.markdown("### 下载分割结果")
-                col1, col2 = st.columns(2)
+    with st.sidebar:
+        marker_type = st.radio(
+            "标记类型",
+            ["我想要的区域(1)", "我不想要的区域(0)"],
+            index=0 if st.session_state.current_marker == 1 else 1,
+            key="marker_selector"
+        )
+        st.session_state.current_marker = 1 if "1" in marker_type else 0
+        st.markdown("""
+            <div class="coordinates-box">
+                <h3>📌 坐标信息</h3>
+                <p>最新坐标：<br><strong style="color:#4CAF50">({x}, {y})</strong></p>
+                <p>当前标记：<strong style="color:{color}">[{marker}] {type}</strong></p>
+                <div class="history-list">
+                    <p>📚 历史记录（最近10条）：</p>
+                    {history}
+                </div>
+            </div>
+            """.format(
+            x=st.session_state.clicks[-1]["x"] if st.session_state.clicks else "N/A",
+            y=st.session_state.clicks[-1]["y"] if st.session_state.clicks else "N/A",
+            marker=st.session_state.current_marker,
+            color="#4CAF50" if st.session_state.current_marker == 1 else "#f44336",
+            type=marker_type,
+            history="\n".join([
+                f'<div class="history-item" style="color: {"#4CAF50" if c["marker"] == 1 else "#f44336"}">'
+                f'→ ({c["x"]}, {c["y"]}) <small>[{c["marker"]}]</small></div>'
+                for c in reversed(st.session_state.clicks[-10:])
+            ])
+        ), unsafe_allow_html=True)
+        if st.button("清除所有记录"):
+            st.session_state.clicks = []
+            st.session_state.input_point = []
+            st.session_state.input_label = []
+            st.session_state.latest_masks = None
+            st.session_state.combine_image = None
+            st.session_state.masks_image = None
+            st.rerun()
 
-                latest_mask = np.array(st.session_state.latest_masks)
-                mask_image = Image.fromarray((latest_mask * 255).astype(np.uint8))
-                mask_bytes = io.BytesIO()
-                mask_image.save(mask_bytes, format='PNG')
+        if st.session_state.combine_image is not None:
+            st.markdown("### 下载分割结果")
+            col1, col2 = st.columns(2)
 
-                masked_result = st.session_state.SAM2.show_mask(latest_mask, image=st.session_state.current_image)
-                masked_result_image = Image.fromarray(masked_result)
-                masked_bytes = io.BytesIO()
-                masked_result_image.save(masked_bytes, format='PNG')
+            mask_bytes = io.BytesIO()
+            st.session_state.masks_image.save(mask_bytes, format='PNG')
+            image_bytes = io.BytesIO()
+            st.session_state.combine_image.save(image_bytes, format='PNG')
 
-                with col1:
-                    st.download_button(
-                        label="下载黑白掩码",
-                        data=mask_bytes.getvalue(),
-                        file_name="mask.png",
-                        mime="image/png"
-                    )
+            with col1:
+                st.download_button(
+                    label="下载掩码",
+                    data=mask_bytes.getvalue(),
+                    file_name="mask.png",
+                    mime="image/png"
+                )
 
-                with col2:
-                    st.download_button(
-                        label="下载带掩码的图像",
-                        data=masked_bytes.getvalue(),
-                        file_name="masked_image.png",
-                        mime="image/png"
-                    )
+            with col2:
+                st.download_button(
+                    label="下载带掩码的图像",
+                    data=image_bytes.getvalue(),
+                    file_name="masked_image.png",
+                    mime="image/png"
+                )
 
 
 main()
