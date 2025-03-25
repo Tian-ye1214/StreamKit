@@ -2,6 +2,7 @@ import numpy as np
 import torch
 from pages.SAM2_1.sam2.build_sam import build_sam2
 from pages.SAM2_1.sam2.sam2_image_predictor import SAM2ImagePredictor
+from pages.SAM2_1.sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
 import cv2
 
 class SAM2Segment:
@@ -13,12 +14,14 @@ class SAM2Segment:
         self.model_cfg = model_cfg
         self.sam2_model = build_sam2(self.model_cfg, self.sam2_checkpoint, device=self.device)
         self.predictor = SAM2ImagePredictor(self.sam2_model)
+        self.mask_generator = SAM2AutomaticMaskGenerator(build_sam2(self.model_cfg, self.sam2_checkpoint
+                                                                    , device=self.device, apply_postprocessing=False))
 
     def show_mask(self, mask, color=None, image=None):
         if color is None:
             color = np.array([30/255, 144/255, 255/255, 0.6])
         h, w = mask.shape[-2:]
-        mask = mask.astype(np.uint8)
+        mask = (mask > 127).astype(np.uint8)
 
         if image is not None:
             image = cv2.resize(image, (w, h))
@@ -63,4 +66,30 @@ class SAM2Segment:
         sorted_ind = np.argsort(scores)[::-1]
         masks = masks[sorted_ind]
         return masks
+
+    def auto_mask_genarator(self, image):
+        masks = self.mask_generator.generate(image)
+        return masks
+
+    def show_masks(self, image, masks):
+        """生成带有随机颜色和轮廓的掩码叠加图"""
+        if len(masks) == 0:
+            return np.zeros_like(image)
+
+        sorted_masks = sorted(masks, key=lambda x: x['area'], reverse=True)
+        h, w = image.shape[:2]
+        overlay = np.zeros((h, w, 4), dtype=np.float32)
+        
+        for ann in sorted_masks:
+            mask = ann['segmentation'].astype(np.uint8)
+            mask = (mask > 0).astype(np.uint8) 
+            color = np.concatenate([np.random.random(3)[::-1], [0.8]])
+            overlay[mask.astype(bool)] = color
+
+            contours, _ = cv2.findContours(mask,
+                                         cv2.RETR_EXTERNAL,
+                                         cv2.CHAIN_APPROX_NONE)
+            contours = [cv2.approxPolyDP(c, 0.01, closed=True) for c in contours]
+            cv2.drawContours(overlay, contours, -1, (0, 0, 1.0, 0.4), 1)
+        return (overlay * 255).astype(np.uint8)
 
