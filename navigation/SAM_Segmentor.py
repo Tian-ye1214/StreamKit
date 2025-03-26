@@ -3,83 +3,16 @@ import streamlit as st
 from streamlit_image_coordinates import streamlit_image_coordinates
 import numpy as np
 from pages.SAM2_1.SAM import SAM2Segment
-from PIL import Image
+from PIL import Image, ImageDraw
 import os
 import sys
 import io
 import cv2
 
-st.markdown("""
-<style>
-/* 更新容器样式 */
-.container {
-    max-width: 100%;
-    padding: 1rem;
-}
-
-/* 优化坐标框样式 */
-.coordinates-box {
-    background: rgba(255,255,255,0.9);
-    border-radius: 10px;
-    padding: 1.5rem;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    margin-bottom: 1rem;
-}
-
-.coordinates-box h3 {
-    margin-top: 0;
-    color: #2c3e50;
-    font-size: 1.2em;
-    border-bottom: 2px solid #4CAF50;
-    padding-bottom: 0.5rem;
-}
-
-/* 历史记录滚动区域 */
-.history-list {
-    max-height: 300px;
-    overflow-y: auto;
-    margin-top: 1rem;
-}
-
-/* 响应式布局调整 */
-@media (max-width: 768px) {
-    .coordinates-box {
-        position: static;
-        max-width: 100%;
-        margin-top: 1rem;
-    }
-}
-
-/* 点击标记样式 */
-.click-point {
-    position: absolute;
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    transform: translate(-50%, -50%);
-    pointer-events: none;
-}
-
-.click-point.positive {
-    background: #4CAF50;
-    border: 2px solid #388E3C;
-}
-
-.click-point.negative {
-    background: #f44336;
-    border: 2px solid #D32F2F;
-}
-
-/* 图像容器样式 */
-.image-container {
-    position: relative;
-    display: inline-block;
-}
-</style>
-""", unsafe_allow_html=True)
-
 
 def initialization():
+    if "coordinates" not in st.session_state:
+        st.session_state["coordinates"] = None
     if "clicks" not in st.session_state:
         st.session_state.clicks = []
     if "mask_image" not in st.session_state:
@@ -100,6 +33,24 @@ def initialization():
         st.session_state.SAM2 = SAM2Segment(sam2_checkpoint, model_cfg)
         st.session_state.input_point = []
         st.session_state.input_label = []
+        st.session_state.box_input = []
+    if "box_coordinates" not in st.session_state:
+        st.session_state.box_coordinates = None
+
+def get_rectangle_coords(
+    points: tuple[tuple[int, int], tuple[int, int]],
+) -> tuple[int, int, int, int]:
+    point1, point2 = points
+    minx = min(point1[0], point2[0])
+    miny = min(point1[1], point2[1])
+    maxx = max(point1[0], point2[0])
+    maxy = max(point1[1], point2[1])
+    return (
+        minx,
+        miny,
+        maxx,
+        maxy,
+    )
 
 
 def resize_image_if_needed(image):
@@ -124,108 +75,61 @@ def resize_image_if_needed(image):
     return np.array(image)
 
 
-def main():
-    initialization()
-    st.markdown("""
-    <h1 style='text-align: center;'>
-        SAM2.1交互式分割页面
-    </h1>
-    <div style='text-align: center; margin-bottom: 20px;'>
-    </div>
-    """, unsafe_allow_html=True)
+def point_inference():
+    if st.session_state.current_image is not None:
+        st.markdown("### 点击掩码生成")
+        if st.session_state.latest_masks is not None:
+            masked_image = st.session_state.SAM2.show_mask(st.session_state.latest_masks,
+                                                           image=st.session_state.current_image)
+        else:
+            masked_image = st.session_state.current_image
+        display_image = st.session_state.SAM2.show_points(masked_image, st.session_state.clicks)
+        try:
+            coords = streamlit_image_coordinates(
+                display_image,
+                key="image",
+                height=display_image.shape[0],
+                use_column_width=False,
+                click_and_drag=False
+            )
+            if coords and coords != st.session_state.get("last_coord"):
+                h, w = st.session_state.current_image.shape[:2]
 
-    with st.expander("使用说明", expanded=False):
-        st.markdown("""
-        🌟 **点触之间，精准分离万物** 🌟
-        
-        **源项目地址**：https://github.com/facebookresearch/sam2
+                actual_x = int(coords["x"])
+                actual_y = int(coords["y"])
 
-        🧰 **操作指南**：
-        
-        1. 上传需要分割的图片
-        2. 选择标记类型（正/负标记）
-        3. 点击目标区域进行分割
-        4. 通过侧边栏实时查看坐标记录
-        5. 使用历史记录回溯操作步骤
+                actual_x = max(0, min(w - 1, actual_x))
+                actual_y = max(0, min(h - 1, actual_y))
 
-        <div style="background: #FCF3CF; padding: 15px; border-radius: 5px; margin-top: 20px;">
-            🔬 典型应用场景：<br>
-            • 人像前景与背景提取<br>
-            • 产品摄影背景分离<br>
-            • 遥感图像地物识别<br>
-            每次点击都带来精准分割！
-        </div>
-        """, unsafe_allow_html=True)
+                click_data = {
+                    "x": actual_x,
+                    "y": actual_y,
+                    "marker": st.session_state.current_marker
+                }
+                st.session_state.input_point.append([actual_x, actual_y])
+                st.session_state.input_label.append(st.session_state.current_marker)
 
-    uploaded_file = st.file_uploader("选择图片", type=["jpg", "png", "jpeg"], label_visibility="collapsed")
-    if uploaded_file is not None:
-        file_bytes = uploaded_file.getvalue()
-        current_file_hash = hash(file_bytes)
-
-        if "previous_file_hash" not in st.session_state or st.session_state.previous_file_hash != current_file_hash:
-            st.session_state.clicks = []
-            st.session_state.input_point = []
-            st.session_state.input_label = []
-            st.session_state.latest_masks = None
-            st.session_state.mask_image = None
-            st.session_state.combine_image = None
-            st.session_state.previous_file_hash = current_file_hash
-
-        st.session_state.current_image = resize_image_if_needed(Image.open(uploaded_file).convert("RGB"))
-
-    tab1, tab2 = st.tabs(['Point inference', 'Auto Masks Generation'])
-    with tab1:
-        if st.session_state.current_image is not None:
-            if st.session_state.latest_masks is not None:
-                masked_image = st.session_state.SAM2.show_mask(st.session_state.latest_masks,
-                                                               image=st.session_state.current_image)
-            else:
-                masked_image = st.session_state.current_image
-            display_image = st.session_state.SAM2.show_points(masked_image, st.session_state.clicks)
-            try:
-                coords = streamlit_image_coordinates(
-                    display_image,
-                    key="image",
-                    height=display_image.shape[0],
-                    use_column_width=False,
-                    click_and_drag=False
-                )
-                if coords and coords != st.session_state.get("last_coord"):
-                    h, w = st.session_state.current_image.shape[:2]
-
-                    actual_x = int(coords["x"])
-                    actual_y = int(coords["y"])
-
-                    actual_x = max(0, min(w - 1, actual_x))
-                    actual_y = max(0, min(h - 1, actual_y))
-
-                    click_data = {
-                        "x": actual_x,
-                        "y": actual_y,
-                        "marker": st.session_state.current_marker
-                    }
-                    st.session_state.input_point.append([actual_x, actual_y])
-                    st.session_state.input_label.append(st.session_state.current_marker)
-
-                    masks = st.session_state.SAM2.point_inference(st.session_state.current_image,
-                                                                  np.array(st.session_state.input_point),
-                                                                  np.array(st.session_state.input_label))
-                    st.session_state.latest_masks = (masks[0] * 255)
-                    st.session_state.masks_image = Image.fromarray(st.session_state.latest_masks.astype(np.uint8))
-                    st.session_state.combine_image = Image.fromarray(
-                        st.session_state.SAM2.show_mask(
+                masks = st.session_state.SAM2.point_inference(st.session_state.current_image,
+                                                              np.array(st.session_state.input_point),
+                                                              np.array(st.session_state.input_label))
+                st.session_state.latest_masks = (masks[0] * 255)
+                st.session_state.masks_image = Image.fromarray(st.session_state.latest_masks.astype(np.uint8))
+                st.session_state.combine_image = Image.fromarray(
+                    st.session_state.SAM2.show_mask(
                         st.session_state.latest_masks, image=st.session_state.current_image
-                        )
                     )
-                    if click_data not in st.session_state.clicks:
-                        st.session_state.clicks.append(click_data)
-                        st.session_state.last_coord = coords
-                        st.rerun()
-            except KeyError as e:
-                st.error(f"生成分割内容出错: {str(e)}")
+                )
+                if click_data not in st.session_state.clicks:
+                    st.session_state.clicks.append(click_data)
+                    st.session_state.last_coord = coords
+                    st.rerun()
+        except KeyError as e:
+            st.error(f"生成分割内容出错: {str(e)}")
 
-    with tab2:
-        auto_masks = None
+
+def auto_masks_generator():
+    auto_masks = None
+    try:
         if st.session_state.current_image is not None:
             st.markdown("### 自动掩码生成")
             if st.session_state.combine_image is not None:
@@ -244,6 +148,132 @@ def main():
                                           combined_mask[..., :3], 0.8, 0)
                 st.session_state.combine_image = Image.fromarray(blended)
                 st.rerun()
+    except KeyError as e:
+        st.error(f"生成分割内容出错: {str(e)}")
+
+
+def box_inference():
+    if st.session_state.current_image is not None:
+        if st.session_state.combine_image:
+            masked_image = np.array(st.session_state.combine_image)
+        else:
+            masked_image = st.session_state.current_image
+        img = Image.fromarray(masked_image)
+        draw = ImageDraw.Draw(img)
+
+        if st.session_state.box_coordinates:
+            coords = get_rectangle_coords(st.session_state.box_coordinates)
+            draw.rectangle(coords, fill=None, outline="red", width=2)
+
+        st.markdown("### 框选目标区域")
+        value = streamlit_image_coordinates(
+            img,
+            key="box_select",
+            click_and_drag=True,
+            height=img.height,
+            use_column_width=False
+        )
+
+        if value is not None:
+            point1 = (value["x1"], value["y1"])
+            point2 = (value["x2"], value["y2"])
+
+            if (point1[0] != point2[0] and point1[1] != point2[1] and 
+                st.session_state.box_coordinates != (point1, point2)):
+                st.session_state.box_coordinates = (point1, point2)
+                
+                box_coords = get_rectangle_coords(st.session_state.box_coordinates)
+                
+                try:
+                    with st.spinner("正在生成分割结果..."):
+                        st.session_state.box_input.append([box_coords[0], box_coords[1], box_coords[2], box_coords[3]])
+                        masks = st.session_state.SAM2.box_inference(st.session_state.current_image
+                                                                    , np.array(st.session_state.box_input))
+                        if len(masks.shape) == 4:
+                            masks = masks[-1]
+                            set_image = np.array(st.session_state.combine_image)
+                            st.session_state.latest_masks = (masks[0] * 255)
+                            st.session_state.masks_image = Image.fromarray(
+                                st.session_state.latest_masks.astype(np.uint8) + np.array(st.session_state.masks_image)
+                            )
+                        else:
+                            set_image = st.session_state.current_image
+                            st.session_state.latest_masks = (masks[0] * 255)
+                            st.session_state.masks_image = Image.fromarray(
+                                st.session_state.latest_masks.astype(np.uint8))
+                        st.session_state.combine_image = Image.fromarray(
+                            st.session_state.SAM2.show_mask(
+                                st.session_state.latest_masks, image=set_image
+                            )
+                        )
+                        st.rerun()
+                except Exception as e:
+                    st.error(f"框选分割出错: {str(e)}")
+
+
+def clear_all():
+    st.session_state.clicks = []
+    st.session_state.input_point = []
+    st.session_state.input_label = []
+    st.session_state.latest_masks = None
+    st.session_state.combine_image = None
+    st.session_state.masks_image = None
+    st.session_state.box_coordinates = None
+
+
+def main():
+    initialization()
+    st.markdown("""
+    <h1 style='text-align: center;'>
+        SAM2.1交互式分割页面
+    </h1>
+    <div style='text-align: center; margin-bottom: 20px;'>
+    </div>
+    """, unsafe_allow_html=True)
+
+    with st.expander("使用说明", expanded=False):
+        st.markdown("""
+        🌟 **点触之间，精准分离万物** 🌟
+
+        **源项目地址**：https://github.com/facebookresearch/sam2
+
+        🧰 **操作指南**：
+
+        1. 上传需要分割的图片
+        2. 选择标记类型（正/负标记）
+        3. 点击目标区域进行分割
+        4. 通过侧边栏实时查看坐标记录
+        5. 使用历史记录回溯操作步骤
+
+        <div style="background: #FCF3CF; padding: 15px; border-radius: 5px; margin-top: 20px;">
+            🔬 典型应用场景：<br>
+            • 人像前景与背景提取<br>
+            • 产品摄影背景分离<br>
+            • 遥感图像地物识别<br>
+            每次点击都带来精准分割！
+        </div>
+        """, unsafe_allow_html=True)
+
+    uploaded_file = st.file_uploader("选择图片", type=["jpg", "png", "jpeg"], label_visibility="collapsed")
+    if uploaded_file is not None:
+        file_bytes = uploaded_file.getvalue()
+
+        current_file_hash = hash(file_bytes)
+        if "previous_file_hash" not in st.session_state or st.session_state.previous_file_hash != current_file_hash:
+            clear_all()
+            st.session_state.previous_file_hash = current_file_hash
+
+        st.session_state.current_image = resize_image_if_needed(Image.open(uploaded_file).convert("RGB"))
+
+    tab1, tab2, tab3 = st.tabs(['Point inference', 'Box inference', 'Auto Masks Generation'])
+    with tab1:
+        point_inference()
+
+    with tab2:
+        box_inference()
+
+    with tab3:
+        auto_masks_generator()
 
     with st.sidebar:
         marker_type = st.radio(
@@ -276,12 +306,7 @@ def main():
             ])
         ), unsafe_allow_html=True)
         if st.button("清除所有记录"):
-            st.session_state.clicks = []
-            st.session_state.input_point = []
-            st.session_state.input_label = []
-            st.session_state.latest_masks = None
-            st.session_state.combine_image = None
-            st.session_state.masks_image = None
+            clear_all()
             st.rerun()
 
         if st.session_state.combine_image is not None:
