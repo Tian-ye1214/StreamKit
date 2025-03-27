@@ -1,6 +1,6 @@
 # 付费模型
 MODEL_MAPPING = {
-    "DeepSeek-v3": "Pro/deepseek-ai/DeepSeek-V3",
+    "DeepSeek-V3-0324": "Pro/deepseek-ai/DeepSeek-V3",
     "DeepSeek-R1": "Pro/deepseek-ai/DeepSeek-R1",
     "QwQ-32B": "Qwen/QwQ-32B",
     "R1-Distill-Qwen-32B": "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B",
@@ -12,11 +12,12 @@ MODEL_MAPPING = {
 
 VISIONMODAL_MAPPING = {
     "QvQ-72B": "Qwen/QVQ-72B-Preview",
-    "Qwen2-VL-72B": "Qwen/Qwen2-VL-72B-Instruct",
-    "Qwen2-VL-7B": "Pro/Qwen/Qwen2-VL-7B-Instruct",
+    "Qwen2.5-VL-72B": "Qwen/Qwen2.5-VL-72B-Instruct",
+    "Qwen2.5-VL-32B": "Qwen/Qwen2.5-VL-32B-Instruct",
+    "Qwen2.5-VL-7B": "Pro/Qwen/Qwen2.5-VL-7B-Instruct",
     "DeepSeek-VL2": "deepseek-ai/deepseek-vl2",
     "InternVL2": "OpenGVLab/InternVL2-26B",
-    "Janus-pro-1B": "deepseek-ai/Janus-Pro-1B",
+    # "Janus-pro-1B": "deepseek-ai/Janus-Pro-1B",
 }
 
 HIGHSPEED_MODEL_MAPPING = {
