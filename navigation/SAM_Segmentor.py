@@ -334,5 +334,5 @@ def main():
                     mime="image/png"
                 )
 
-
+st.session_state.clear()
 main()
