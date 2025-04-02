@@ -337,5 +337,5 @@ def main():
         else:
             display_knowledge_graph(st.session_state.rag.working_dir, show_isolated_nodes)
 
-
+st.session_state.clear()
 main()
