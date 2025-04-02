@@ -3,7 +3,7 @@ import streamlit as st
 import requests
 import json
 
-
+st.session_state.clear()
 st.set_page_config(page_title="Dify API 交互", layout="wide")
 st.title("Dify API 交互界面")
 
