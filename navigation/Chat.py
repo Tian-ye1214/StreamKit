@@ -95,5 +95,5 @@ def main():
             except Exception as e:
                 st.error(f"生成回答时出错: {str(e)}")
 
-
+st.session_state.clear()
 main()
