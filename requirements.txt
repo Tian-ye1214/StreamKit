@@ -6,6 +6,7 @@ python-docx
 duckduckgo_search
 streamlit_image_coordinates
 pdf2zh
+diffusers
 
 networkx
 pyvis
