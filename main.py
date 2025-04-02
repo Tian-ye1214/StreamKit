@@ -5,7 +5,6 @@ load_dotenv()
 pages = {
     "AI交互平台": [
         st.Page("navigation/Chat.py", title="AI对话平台"),
-        st.Page("navigation/MultimodalChat.py", title="多模态AI交互平台"),
         st.Page("navigation/ImageGenerator.py", title="文本生成图像"),
     ],
     "Dify": [
