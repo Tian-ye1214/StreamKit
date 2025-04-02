@@ -281,6 +281,9 @@ class BackendInteractionLogic:
 
     def ai_generation(self, sections):
         st.session_state.messages = [{"role": "system", "content": self.get_system_prompt()}]
+        st.session_state.messages.extend([{"role": m["role"], "content": m["content"]}
+                                          for m in st.session_state.chat_messages])
+        st.session_state.chat_messages.append(st.session_state.current_prompt)
         base64_image = encode_image_to_base64(st.session_state.uploaded_image) if st.session_state.get("uploaded_image",
                                                                                                        None) else None
         if base64_image and sections=='视觉对话':
@@ -293,9 +296,6 @@ class BackendInteractionLogic:
             })
         else:
             st.session_state.messages.append({"role": "user", "content": st.session_state.prompt})
-
-        st.session_state.messages.extend([{"role": m["role"], "content": m["content"]}
-                                          for m in st.session_state.chat_messages])
 
         if st.session_state.stream:
             reason_placeholder = st.empty()
@@ -392,7 +392,6 @@ class BackendInteractionLogic:
         msg_counter = st.empty()
         st.session_state.prompt = prompt
         st.session_state.current_prompt = {"role": "user", "content": st.session_state.prompt}
-        st.session_state.chat_messages.append(st.session_state.current_prompt)
         msg_counter.markdown(f"""
         <div style='text-align: center; margin: 10px 0; font-size:14px;'>
             当前对话消息数：<span style='color: #ff4b4b; font-weight:bold;'>{len(st.session_state.chat_messages)}</span>/40
