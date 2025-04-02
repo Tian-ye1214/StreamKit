@@ -279,11 +279,11 @@ class BackendInteractionLogic:
                 st.error(f"没有检索到答案哦，错误信息:{e}")
                 st.session_state.search_result = None
 
-    def ai_generation(self):
+    def ai_generation(self, sections):
         st.session_state.messages = [{"role": "system", "content": self.get_system_prompt()}]
         base64_image = encode_image_to_base64(st.session_state.uploaded_image) if st.session_state.get("uploaded_image",
                                                                                                        None) else None
-        if base64_image:
+        if base64_image and sections=='视觉对话':
             st.session_state.messages.append({
                 "role": "user",
                 "content": [
@@ -318,7 +318,7 @@ class BackendInteractionLogic:
                     if getattr(delta, 'reasoning_content', None):
                         reasoning_content += delta.reasoning_content
                         reason_placeholder.markdown(
-                            f"<div style='background:#333333; border-radius:5px; padding:10px; margin-bottom:10px; font-size:14px;'>"
+                            f"<div style='background:#f0f0f0; border-radius:5px; padding:10px; margin-bottom:10px; font-size:14px;'>"
                             f"🤔 {reasoning_content}</div>",
                             unsafe_allow_html=True
                         )
@@ -346,7 +346,7 @@ class BackendInteractionLogic:
 
             if reasoning_content:
                 st.markdown(
-                    f"<div style='background:#333333; border-radius:5px; padding:10px; margin-bottom:10px; font-size:14px;'>"
+                    f"<div style='background:#f0f0f0; border-radius:5px; padding:10px; margin-bottom:10px; font-size:14px;'>"
                     f"🤔 {reasoning_content}</div>",
                     unsafe_allow_html=True
                 )
