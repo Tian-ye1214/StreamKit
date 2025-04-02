@@ -95,5 +95,10 @@ def main():
             except Exception as e:
                 st.error(f"生成回答时出错: {str(e)}")
 
-st.session_state.clear()
+if 'previous_page' not in st.session_state:
+    st.session_state.previous_page = 'chat'
+current_page = 'chat'
+if current_page != st.session_state.previous_page:
+        st.session_state.clear()
+        st.session_state.previous_page = current_page
 main()
