@@ -224,5 +224,5 @@ def main():
     else:
         st.info("👈 请在左侧上传PDF文件并设置翻译参数")
 
-
+st.session_state.clear()
 main()
