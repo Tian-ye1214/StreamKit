@@ -224,5 +224,11 @@ def main():
     else:
         st.info("👈 请在左侧上传PDF文件并设置翻译参数")
 
-st.session_state.clear()
+
+if 'previous_page' not in st.session_state:
+    st.session_state.previous_page = 'PDFTranslator'
+current_page = 'PDFTranslator'
+if current_page != st.session_state.previous_page:
+        st.session_state.clear()
+        st.session_state.previous_page = current_page
 main()
