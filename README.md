@@ -16,6 +16,6 @@
 
  - pip install -r requirements.txt
  - 在.env中配置API_key
- - 下载doclayout_yolo_docstructbench_imgsz1024模型放入pages/ModelCheckpoint中
+ - 下载doclayout_yolo_docstructbench_imgsz1024模型放入pages/ModelCheckpoint中：https://huggingface.co/wybxc/DocLayout-YOLO-DocStructBench-onnx/tree/main
  - 下载SAM2.1模型放入pages/SAM2_1/checkpoints中
  - streamlit run main.py
