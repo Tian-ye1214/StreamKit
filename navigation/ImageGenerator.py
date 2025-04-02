@@ -230,5 +230,5 @@ def main():
                 # )
         else:
             st.warning("请先填入提示词")
-
+st.session_state.clear()
 main()
