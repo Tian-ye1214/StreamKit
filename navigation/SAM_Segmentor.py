@@ -334,5 +334,11 @@ def main():
                     mime="image/png"
                 )
 
-st.session_state.clear()
+
+if 'previous_page' not in st.session_state:
+    st.session_state.previous_page = 'SAM2'
+current_page = 'SAM2'
+if current_page != st.session_state.previous_page:
+        st.session_state.clear()
+        st.session_state.previous_page = current_page
 main()
