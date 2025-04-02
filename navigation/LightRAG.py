@@ -337,5 +337,12 @@ def main():
         else:
             display_knowledge_graph(st.session_state.rag.working_dir, show_isolated_nodes)
 
-st.session_state.clear()
+
+if 'previous_page' not in st.session_state:
+    st.session_state.previous_page = 'lightRAG'
+current_page = 'lightRAG'
+print(current_page)
+if current_page != st.session_state.previous_page:
+        st.session_state.clear()
+        st.session_state.previous_page = current_page
 main()
