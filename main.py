@@ -14,6 +14,7 @@ pages = {
         st.Page("navigation/LightRAG.py", title="知识图谱检索"),
         st.Page("navigation/PDFTranslator.py", title="PDF固版翻译"),
         st.Page("navigation/SAM_Segmentor.py", title="分割万物"),
+        st.Page("navigation/PaperPolishing.py", title="论文分段润色"),
     ],
 }
 
