@@ -1,9 +1,8 @@
 import streamlit as st
 import os
-import tempfile
-from gptpdf import parse_pdf
 import re
 from openai import OpenAI
+import language_tool_python
 
 st.set_page_config(
     page_title="论文润色与处理工具",
@@ -15,8 +14,6 @@ st.set_page_config(
 def initialization():
     if "uploaded_file" not in st.session_state:
         st.session_state.uploaded_file = None
-    if "PDF2Markdown" not in st.session_state:
-        st.session_state.PDF2Markdown = None
     if "TEX_content" not in st.session_state:
         st.session_state.TEX_content = None
     if "tex_history" not in st.session_state:
@@ -38,50 +35,6 @@ def initialization():
                                              "修改过程需保持原文核心含义不变，不得更改专业术语和数据信息。")
     if "polished_paragraph" not in st.session_state:
         st.session_state.polished_paragraph = None
-
-
-def pdf2Markdown():
-    if st.session_state.PDF2Markdown is not None:
-        st.subheader("处理结果")
-        st.markdown(st.session_state.PDF2Markdown)
-
-        st.sidebar.download_button(
-            label="下载Markdown文件",
-            data=st.session_state.PDF2Markdown,
-            file_name=f"{os.path.splitext(st.session_state.uploaded_file.name)[0]}.md",
-            mime="text/markdown"
-        )
-
-    if st.session_state.uploaded_file is not None and st.session_state.PDF2Markdown is None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            pdf_path = os.path.join(temp_dir, st.session_state.uploaded_file.name)
-            with open(pdf_path, "wb") as f:
-                f.write(st.session_state.uploaded_file.getbuffer())
-
-            output_dir = os.path.join(temp_dir, "output")
-            os.makedirs(output_dir, exist_ok=True)
-
-            with st.spinner("正在处理PDF文件，请稍候..."):
-                try:
-                    _, _ = parse_pdf(
-                        pdf_path,
-                        api_key=os.environ.get('SiliconFlow_API_KEY'),
-                        base_url=os.environ.get('SiliconFlow_URL'),
-                        model='Pro/Qwen/Qwen2.5-VL-7B-Instruct',
-                        output_dir=output_dir,
-                        gpt_worker=6
-                    )
-                    markdown_files = [f for f in os.listdir(output_dir) if f.endswith('.md')]
-                    if markdown_files:
-                        markdown_path = os.path.join(output_dir, markdown_files[0])
-                        with open(markdown_path, 'r', encoding='utf-8') as md_file:
-                            st.session_state.PDF2Markdown = md_file.read()
-                    else:
-                        st.error("未找到生成的Markdown文件")
-                    st.rerun()
-
-                except Exception as e:
-                    st.error(f"处理PDF时出错: {str(e)}")
 
 
 def polish_text_with_llm(text, prompt, model="Pro/deepseek-ai/DeepSeek-V3"):
@@ -155,6 +108,9 @@ def split_tex_into_paragraphs(tex_content):
     tex_content = re.sub(r'\\label\{.*?\}', '', tex_content)
 
     paragraphs = [p.strip() for p in tex_content.split('\n\n') if p.strip()]
+    
+    if len(paragraphs) < 3:
+        paragraphs = [p.strip() for p in tex_content.split('\n') if p.strip()]
 
     # 过滤掉只包含命令的段落（如只有\section{}的段落）
     filtered_paragraphs = []
@@ -167,11 +123,15 @@ def split_tex_into_paragraphs(tex_content):
         if len(p) < 10 and not re.search(r'[a-zA-Z\u4e00-\u9fa5]', p):
             continue
         filtered_paragraphs.append(p)
-
+    
+    # 如果没有找到任何段落，返回整个内容作为一个段落
+    if not filtered_paragraphs:
+        filtered_paragraphs = [tex_content]
+        
     return filtered_paragraphs
 
 
-def TEX2Markdown():
+def TEX_Polishing():
     col1, col2 = st.columns([3, 2])
     # --- 左栏：展示段落列表 ---
     with col1:
@@ -184,7 +144,9 @@ def TEX2Markdown():
             with st.container(height=800, border=False):
                 for i, paragraph in enumerate(st.session_state.tex_paragraphs):
                     with st.container(border=True):
-                        st.text(paragraph)
+                        # 使用markdown显示段落，保留格式
+                        st.markdown(f"**段落 {i+1}**")
+                        st.text_area("", value=paragraph, height=100, key=f"paragraph_{i}", disabled=True)
                         if st.button(f"润色该段落", key=f"polish_btn_{i}"):
                             st.session_state.current_polishing_paragraph_index = i
                             st.session_state.paragraph_to_polish = paragraph
@@ -245,20 +207,30 @@ def TEX2Markdown():
 
                         original_paragraph = st.session_state.tex_paragraphs[
                             st.session_state.current_polishing_paragraph_index]
-                        st.session_state.TEX_content = st.session_state.TEX_content.replace(
-                            original_paragraph,
-                            st.session_state.polished_paragraph,
-                            1
-                        )
-
-                        st.session_state.tex_paragraphs[
-                            st.session_state.current_polishing_paragraph_index] = st.session_state.polished_paragraph
-
-                        st.success("段落已更新！")
-                        st.session_state.paragraph_to_polish = ""
-                        st.session_state.polished_paragraph = None
-                        st.session_state.current_polishing_paragraph_index = None
-                        st.rerun()
+                        
+                        # 使用更精确的替换方法
+                        try:
+                            # 确保段落内容被正确替换
+                            new_content = st.session_state.TEX_content.replace(
+                                original_paragraph,
+                                st.session_state.polished_paragraph,
+                                1
+                            )
+                            
+                            # 检查替换是否成功
+                            if new_content == st.session_state.TEX_content:
+                                st.error("替换失败：未找到匹配的段落。请尝试重新选择段落。")
+                            else:
+                                st.session_state.TEX_content = new_content
+                                st.session_state.tex_paragraphs[
+                                    st.session_state.current_polishing_paragraph_index] = st.session_state.polished_paragraph
+                                st.success("段落已更新！")
+                                st.session_state.paragraph_to_polish = ""
+                                st.session_state.polished_paragraph = None
+                                st.session_state.current_polishing_paragraph_index = None
+                                st.rerun()
+                        except Exception as e:
+                            st.error(f"应用修改时出错: {str(e)}")
 
                 with col2:
                     if st.button("❌ 取消", key="cancel_polish_button"):
@@ -271,10 +243,72 @@ def TEX2Markdown():
             st.info("请从左侧选择一个段落进行润色")
 
 
+def Textual_polishing():
+    st.subheader("文本拼写检查")
+    input_text = st.text_area(
+        "请输入需要检查的文本：",
+        height=200,
+        key="text_input"
+    )
+    if st.button("开始检查", key="check_button"):
+        col1, col2 = st.columns([1, 1])
+        try:
+            tool = language_tool_python.LanguageTool('en-US')
+            matches = tool.check(input_text)
+            tool.close()
+
+            if matches:
+                with col1:
+                    st.markdown("### 错误详情")
+                    for i, match in enumerate(matches):
+                        if match.message == 'Possible spelling mistake found.':
+                            continue
+                        st.markdown(f"""
+                        <div style="font-size: 14px; padding: 10px; margin: 5px 0; background-color: #f5f5f5; border-radius: 4px;">
+                            <div><span style="font-weight: bold;">错误类型</span>: {match.ruleId}</div>
+                            <div><span style="font-weight: bold;">错误位置</span>: {match.offset}-{match.offset + match.errorLength}</div>
+                            <div><span style="font-weight: bold;">错误内容</span>: <span style="color: #ff4b4b;">{input_text[match.offset:match.offset + match.errorLength]}</span></div>
+                            <div><span style="font-weight: bold;">建议修改</span>: {match.replacements[0] if match.replacements else '无建议'}</div>
+                            <div><span style="font-weight: bold;">错误说明</span>: {match.message}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                with col2:
+                    st.markdown("### 逐条修改预览")
+                    for i, match in enumerate(matches):
+                        if match.message == 'Possible spelling mistake found.':
+                            continue
+                        if match.replacements:
+                            modified_segment = (
+                                    input_text[:match.offset] +
+                                    f"**{match.replacements[0]}**" +  # 加粗修改部分
+                                    input_text[match.offset + match.errorLength:]
+                            )
+                            st.markdown(modified_segment)
+                            st.markdown('--------------------')
+
+                st.markdown("### 最终修改结果")
+                corrected_text = input_text
+                for match in sorted(matches, key=lambda x: -x.offset):
+                    if match.message == 'Possible spelling mistake found.':
+                        continue
+                    if match.replacements:
+                        corrected_text = (
+                                corrected_text[:match.offset] +
+                                f"**{match.replacements[0]}**" +
+                                corrected_text[match.offset + match.errorLength:]
+                        )
+                st.markdown(corrected_text)
+
+            else:
+                st.success("未发现语法或拼写错误！")
+
+        except Exception as e:
+            st.error(f"检查过程中出现错误: {str(e)}")
+
+
 def main():
     initialization()
     st.title("论文润色与处理工具")
-    st.write("上传PDF或TEX文件。对于TEX文件，可在右侧进行段落润色。")
 
     if st.sidebar.button("清除所有记录"):
         keys_to_keep = ['previous_page']
@@ -286,7 +320,6 @@ def main():
 
     with st.sidebar:
         def on_file_change():
-            st.session_state.PDF2Markdown = None
             st.session_state.TEX_content = None
             st.session_state.paragraph_to_polish = ""
             st.session_state.polished_paragraph = None
@@ -298,16 +331,19 @@ def main():
 
         st.session_state.uploaded_file = st.file_uploader(
             "选择文件",
-            type=['pdf', 'tex'],
+            type=['tex'],
             key="file_uploader",
             on_change=on_file_change
         )
 
-    if st.session_state.uploaded_file is not None:
-        if st.session_state.uploaded_file.name.endswith('.pdf'):
-            pdf2Markdown()
-        elif st.session_state.uploaded_file.name.endswith('.tex'):
-            TEX2Markdown()
+    tab1, tab2 = st.tabs(['文段语法检查', 'tex文段润色'])
+    with tab1:
+        Textual_polishing()
+
+    with tab2:
+        if st.session_state.uploaded_file is not None:
+            if st.session_state.uploaded_file.name.endswith('.tex'):
+                TEX_Polishing()
 
 
 if 'previous_page' not in st.session_state:
