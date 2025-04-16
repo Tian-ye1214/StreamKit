@@ -21,11 +21,12 @@ VISIONMODAL_MAPPING = {
 }
 
 HIGHSPEED_MODEL_MAPPING = {
-    "GPT-4o-mini": "gpt-4o-mini",
+    "DeepSeek": "deepseek-chat",
+    "GPT-4.1-mini": "gpt-4.1-mini",
+    "Claude3.7": "claude-3-7-sonnet-20250219",
     "Gemini-2.0-Flash": "gemini-2.0-flash",
-    "Gemini-2.0-Lite": "gemini-2.0-flash-lite-preview-02-05",
-    "智谱清言": "glm-4-flashx",
-    "百川智能": "Baichuan4-Air",
+    "通义千问-Max": "qwen-max-latest",
+    "智谱清言": "glm-4-plus",
     "豆包": "Doubao-pro-32k",
 }
 
