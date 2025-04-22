@@ -1,12 +1,16 @@
 import streamlit as st
 import os
-import re
 from openai import OpenAI
 import language_tool_python
 from pages.Functions.Constants import HIGHSPEED_MODEL_MAPPING
+from pages.Functions.Prompt import polishing_prompt, political_prompt, grammer_prompt
+from pages.Functions.DocSplit import split_tex_into_paragraphs, split_doc_into_paragraphs
+import json
+import io
+from docx import Document
 
 st.set_page_config(
-    page_title="论文润色与处理工具",
+    page_title="语法检查与文段润色",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -27,6 +31,8 @@ def initialization():
         st.session_state.current_polishing_paragraph_index = None
     if "show_all_paragraphs" not in st.session_state:
         st.session_state.show_all_paragraphs = True
+    if "file_type" not in st.session_state:
+        st.session_state.file_type = None
 
     if "paragraph_to_polish" not in st.session_state:
         st.session_state.paragraph_to_polish = ""
@@ -45,10 +51,10 @@ def initialization():
         st.session_state.selected_model = "deepseek-chat"
     if "censorship_prompt" not in st.session_state:
         st.session_state.censorship_prompt = ("你是一位政治审查专家，你的任务是对下述文章进行政治审查，并："
-                                             "1. 识别可能存在的政治敏感内容；"
-                                             "2. 评估内容的政治倾向性；"
-                                             "3. 指出可能违反国家法律法规的内容；"
-                                             "4. 提供详细的审查意见。")
+                                              "1. 识别可能存在的政治敏感内容；"
+                                              "2. 评估内容的政治倾向性；"
+                                              "3. 指出可能违反国家法律法规的内容；"
+                                              "4. 提供详细的审查意见。")
     if "censorship_result" not in st.session_state:
         st.session_state.censorship_result = None
     if "current_censorship_paragraph_index" not in st.session_state:
@@ -61,35 +67,20 @@ def initialization():
         st.session_state.censorship_results = {}
 
 
-def polish_text_with_llm(text, prompt):
-    system_prompt = """
-    You are a professional academic writing optimization assistant specializing in refining and proofreading academic document excerpts. 
-    Your core tasks are: 
-    1. Correct grammatical errors and spelling mistakes 
-    2. Optimize sentence structures for improved fluency 
-    3. Ensure accurate usage of technical terminology 
-    4. Maintain academic writing standards. Strictly provide ONLY the polished text without any explanations, notes, or additional comments. 
-    5. Do not modify any citation or paragraph mark content, such as \\cite, \\section.
-    6. Do not modify the formatting, such as line breaks, indents, and spaces. Please keep the format consistent with the original text.
-    Preserve the original meaning and never alter technical terms or numerical data. 
-    When encountering ambiguous content requiring author confirmation, directly implement the most reasonable revision.
-    """
+def polish_text_with_llm(message):
     try:
         st.subheader("润色结果")
         content = ""
         reasoning_content = ""
 
         model = st.session_state.get("selected_model", "deepseek-chat")
-            
+
         with st.container(height=300):
             reason_placeholder = st.empty()
             message_placeholder = st.empty()
             for chunk in st.session_state.Client.chat.completions.create(
                     model=model,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": f"{prompt}\n\n文段内容：{text}"}
-                    ],
+                    messages=message,
                     temperature=1.0,
                     stream=True
             ):
@@ -115,57 +106,46 @@ def polish_text_with_llm(text, prompt):
         return None
 
 
-def split_tex_into_paragraphs(tex_content):
-    # 移除常见的命令和环境声明
-    tex_content = re.sub(r'(?<!\\)%.*$', '', tex_content, flags=re.MULTILINE)
-    tex_content = re.sub(r'\\documentclass.*?{.*?}', '', tex_content)
-    tex_content = re.sub(r'\\usepackage(\[.*?\])?{.*?}', '', tex_content)
-    tex_content = re.sub(r'\\begin{document}', '', tex_content)
-    tex_content = re.sub(r'\\end{document}', '', tex_content)
-    tex_content = re.sub(r'\\maketitle', '', tex_content)
-    tex_content = re.sub(r'\\usetikzlibrary.*?$', '', tex_content, flags=re.MULTILINE)
-    tex_content = re.sub(r'\\bibliographystyle\{.*?\}', '', tex_content)
-    tex_content = re.sub(r'\\bibliography\{.*?\}', '', tex_content)
-    tex_content = re.sub(r'\\tableofcontents', '', tex_content)
-    tex_content = re.sub(r'\\listoffigures', '', tex_content)
-    tex_content = re.sub(r'\\listoftables', '', tex_content)
-    tex_content = re.sub(r'\\setcounter\{.*?\}\{.*?\}', '', tex_content)
-    tex_content = re.sub(r'\\graphicspath\{.*?\}', '', tex_content)
-    tex_content = re.sub(r'\\newcommand\{.*?\}\{.*?\}', '', tex_content)
-    tex_content = re.sub(r'\\renewcommand\{.*?\}\{.*?\}', '', tex_content)
-    tex_content = re.sub(r'\\label\{.*?\}', '', tex_content)
-
-    paragraphs = [p.strip() for p in tex_content.split('\n\n') if p.strip()]
-
-    if len(paragraphs) < 3:
-        paragraphs = [p.strip() for p in tex_content.split('\n') if p.strip()]
-
-    # 过滤掉只包含命令的段落（如只有\section{}的段落）
-    filtered_paragraphs = []
-    for p in paragraphs:
-        # 如果段落只包含单一的命令（如\section{}），或者是空段落，则跳过
-        if not p or re.match(r'^\s*\\(section|subsection|subsubsection|paragraph|title|author|date|label)\{.*?\}\s*$',
-                             p):
-            continue
-        # 如果段落长度过短且不包含实质性文本内容，则跳过
-        if len(p) < 10 and not re.search(r'[a-zA-Z\u4e00-\u9fa5]', p):
-            continue
-        filtered_paragraphs.append(p)
-
-    # 如果没有找到任何段落，返回整个内容作为一个段落
-    if not filtered_paragraphs:
-        filtered_paragraphs = [tex_content]
-
-    return filtered_paragraphs
+def process_uploaded_file():
+    """处理上传的文件，根据文件类型提取内容"""
+    if st.session_state.uploaded_file is None:
+        return None
+    
+    file_name = st.session_state.uploaded_file.name
+    file_extension = os.path.splitext(file_name)[1].lower()
+    
+    if file_extension == '.tex':
+        st.session_state.file_type = 'tex'
+        return st.session_state.uploaded_file.getvalue().decode('utf-8')
+    elif file_extension == '.doc' or file_extension == '.docx':
+        st.session_state.file_type = 'doc'
+        try:
+            doc = Document(io.BytesIO(st.session_state.uploaded_file.getvalue()))
+            full_text = '\n\n'.join([paragraph.text for paragraph in doc.paragraphs if paragraph.text.strip()])
+            return full_text
+        except Exception as e:
+            st.error(f"处理Word文档时出错: {str(e)}")
+            return None
+    else:
+        st.error(f"不支持的文件类型: {file_extension}")
+        return None
 
 
 def TEX_Polishing():
     col1, col2 = st.columns([1, 1])
     # --- 左栏：展示段落列表 ---
     with col1:
-        st.session_state.TEX_content = st.session_state.uploaded_file.getvalue().decode('utf-8') if st.session_state.TEX_content is None else st.session_state.TEX_content
-        st.session_state.tex_paragraphs = split_tex_into_paragraphs(st.session_state.TEX_content)
-        st.subheader("TEX 文件内容（原始段落）")
+        if st.session_state.TEX_content is None:
+            st.session_state.TEX_content = process_uploaded_file()
+        
+        if st.session_state.TEX_content is not None:
+            # 根据文件类型选择不同的段落分割方法
+            if st.session_state.file_type == 'tex':
+                st.session_state.tex_paragraphs = split_tex_into_paragraphs(st.session_state.TEX_content)
+                st.subheader("TEX 文件内容（原始段落）")
+            else:
+                st.session_state.tex_paragraphs = split_doc_into_paragraphs(st.session_state.TEX_content)
+                st.subheader("Word 文档内容（原始段落）")
 
         with st.container(height=800, border=False):
             # 如果当前正在润色某个段落，只显示该段落
@@ -177,30 +157,26 @@ def TEX_Polishing():
                     if st.button("↩️ 返回所有段落", key="back_to_all_paragraphs"):
                         st.session_state.show_all_paragraphs = True
                         st.rerun()
-                    modified_paragraph = st.text_area("段落详细内容", value=paragraph, height=500, key=f"Paragraph_details_{i}", disabled=False)
+                    modified_paragraph = st.text_area("段落详细内容", value=paragraph, height=500,
+                                                      key=f"Paragraph_details_{i}", disabled=False)
                     st.session_state.paragraph_to_polish = modified_paragraph
                     st.session_state.tex_paragraphs[i] = modified_paragraph
-                    st.session_state.TEX_content = st.session_state.TEX_content.replace(paragraph, modified_paragraph, 1)
+                    st.session_state.TEX_content = st.session_state.TEX_content.replace(paragraph, modified_paragraph,
+                                                                                        1)
             else:
                 for i, paragraph in enumerate(st.session_state.tex_paragraphs):
                     with st.container(border=True, height=300):
                         st.markdown(f"**段落 {i + 1}**")
-                        modified_paragraph = st.text_area("段落内容", value=paragraph, height=250, key=f"paragraph_{i}", disabled=False)
+                        modified_paragraph = st.text_area("段落内容", value=paragraph, height=250, key=f"paragraph_{i}",
+                                                          disabled=False)
                         st.session_state.tex_paragraphs[i] = modified_paragraph
-                        st.session_state.TEX_content = st.session_state.TEX_content.replace(paragraph, modified_paragraph, 1)
+                        st.session_state.TEX_content = st.session_state.TEX_content.replace(paragraph,
+                                                                                            modified_paragraph, 1)
                         if st.button(f"润色该段落", key=f"polish_btn_{i}"):
                             st.session_state.current_polishing_paragraph_index = i
                             st.session_state.paragraph_to_polish = modified_paragraph
                             st.session_state.show_all_paragraphs = False
                             st.rerun()
-
-        st.sidebar.download_button(
-            label="下载 TEX 文件",
-            data=st.session_state.TEX_content,
-            file_name=f"{os.path.splitext(st.session_state.uploaded_file.name)[0]}_processed.tex",
-            mime="text/plain",
-            key="download_tex_button"
-        )
 
         if st.session_state.tex_history:
             if st.sidebar.button(f"↩️ 撤销上次覆盖 ({len(st.session_state.tex_history)}步可撤销)",
@@ -229,10 +205,8 @@ def TEX_Polishing():
             if st.button("开始润色", key="start_polish_button"):
                 st.session_state.polished_paragraph = None
                 with st.spinner("正在调用 LLM 进行润色..."):
-                    st.session_state.polished_paragraph = polish_text_with_llm(
-                        st.session_state.paragraph_to_polish,
-                        st.session_state.polishing_prompt
-                    )
+                    message = polishing_prompt(st.session_state.paragraph_to_polish, st.session_state.polishing_prompt)
+                    st.session_state.polished_paragraph = polish_text_with_llm(message)
 
             if st.session_state.polished_paragraph is not None:
                 polish_col1, polish_col2 = st.columns(2)
@@ -284,7 +258,7 @@ def Textual_polishing():
         height=200,
         key="text_input"
     )
-    if st.button("开始检查", key="check_button"):
+    if st.button("语法检查", key="check_button"):
         col1, col2 = st.columns([1, 1])
         try:
             tool = language_tool_python.LanguageTool('en-US')
@@ -293,7 +267,7 @@ def Textual_polishing():
 
             # 过滤掉所有Possible spelling mistake found类型的错误
             filtered_matches = [match for match in matches if match.message != 'Possible spelling mistake found.']
-            
+
             if not filtered_matches:
                 st.success("未发现语法或拼写错误！")
             else:
@@ -335,11 +309,49 @@ def Textual_polishing():
         except Exception as e:
             st.error(f"检查过程中出现错误: {str(e)}")
 
+    if st.button("AI检查", key="AI_check_button"):
+        if not input_text:
+            st.warning("请输入需要检查的文本！")
+            return
+            
+        st.subheader("AI语法审查结果")
+        with st.spinner("正在使用AI进行语法审查..."):
+            try:
+                message = grammer_prompt(input_text)
+                result = polish_text_with_llm(message)
+                try:
+                    result_json = json.loads(result)
+                    st.markdown("### 修正详情")
+                    for i, correction in enumerate(result_json.get("corrections", [])):
+                        st.markdown(f"""
+                        <div style="font-size: 14px; padding: 10px; margin: 5px 0; background-color: #f5f5f5; border-radius: 4px;">
+                            <div><span style="font-weight: bold;">错误内容</span>: <span style="color: #ff4b4b;">{correction.get('original', '')}</span></div>
+                            <div><span style="font-weight: bold;">修正建议</span>: <span style="color: #00aa00;">{correction.get('corrected', '')}</span></div>
+                            <div><span style="font-weight: bold;">错误说明</span>: {correction.get('explanation', '')}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                    st.markdown("### 完整修正文本")
+                    st.markdown(result_json.get("corrected_text", ""))
+                    
+                except json.JSONDecodeError:
+                    st.markdown("### AI审查结果")
+                    st.markdown(result)
+                    
+            except Exception as e:
+                st.error(f"AI语法审查过程中出现错误: {str(e)}")
+
 
 def Political_censorship():
-    st.session_state.TEX_content = st.session_state.uploaded_file.getvalue().decode(
-        'utf-8') if st.session_state.TEX_content is None else st.session_state.TEX_content
-    st.session_state.tex_paragraphs = split_tex_into_paragraphs(st.session_state.TEX_content)
+    if st.session_state.TEX_content is None:
+        st.session_state.TEX_content = process_uploaded_file()
+    
+    if st.session_state.TEX_content is not None:
+        # 根据文件类型选择不同的段落分割方法
+        if st.session_state.file_type == 'tex':
+            st.session_state.tex_paragraphs = split_tex_into_paragraphs(st.session_state.TEX_content)
+        else:
+            st.session_state.tex_paragraphs = split_doc_into_paragraphs(st.session_state.TEX_content)
 
     col1, col2 = st.columns([1, 1])
 
@@ -370,7 +382,6 @@ def Political_censorship():
         if st.session_state.current_censorship_paragraph_index is not None and st.session_state.paragraph_to_censor:
             st.subheader("段落政治审查")
             st.markdown(f"**当前审查段落 {st.session_state.current_censorship_paragraph_index + 1}**")
-            st.markdown(st.session_state.paragraph_to_censor)
 
             st.session_state.censorship_prompt = st.text_area(
                 "审查要求 (Prompt):",
@@ -381,39 +392,11 @@ def Political_censorship():
 
             if st.button("开始政治审查", key="start_censorship_button"):
                 with st.spinner("正在调用大模型进行政治审查..."):
-                    system_prompt = """
-                    你是一位政治审查专家，你的任务是对下述文章段落进行政治审查，并：
-                    1. 识别可能存在的政治敏感内容；
-                    2. 评估内容的政治倾向性；
-                    3. 指出可能违反国家法律法规的内容；
-                    4. 提供详细的审查意见。
-                    请提供全面的审查报告，包括发现的问题和建议。
-                    """
-                    
                     try:
-                        model = st.session_state.get("selected_model", "deepseek-chat")
-                        content = ""
-                        with st.container(height=300):
-                            message_placeholder = st.empty()
-                            for chunk in st.session_state.Client.chat.completions.create(
-                                    model=model,
-                                    messages=[
-                                        {"role": "system", "content": system_prompt},
-                                        {"role": "user", "content": f"{st.session_state.censorship_prompt}\n\n段落内容：{st.session_state.paragraph_to_censor}"}
-                                    ],
-                                    temperature=0.7,
-                                    stream=True
-                            ):
-                                if chunk.choices and len(chunk.choices) > 0:
-                                    delta = chunk.choices[0].delta
-                                    if delta and delta.content is not None:
-                                        content += delta.content
-                                        message_placeholder.markdown(
-                                            f"<div style='font-size:16px; margin-top:10px;'>{content}</div>",
-                                            unsafe_allow_html=True
-                                        )
-
-                        st.session_state.censorship_results[st.session_state.current_censorship_paragraph_index] = content
+                        message = political_prompt(st.session_state.censorship_prompt, st.session_state.paragraph_to_censor)
+                        content = polish_text_with_llm(message)
+                        st.session_state.censorship_results[
+                            st.session_state.current_censorship_paragraph_index] = content
                         st.session_state.censorship_result = content
                         st.rerun()
                     except Exception as e:
@@ -429,14 +412,14 @@ def Political_censorship():
 
         elif st.session_state.censorship_results:
             st.subheader("所有段落审查结果摘要")
-            
+
             for i, paragraph in enumerate(st.session_state.tex_paragraphs):
                 with st.expander(f"段落 {i + 1} 审查结果", expanded=False):
                     if i in st.session_state.censorship_results:
                         st.markdown(st.session_state.censorship_results[i])
                     else:
                         st.info("该段落尚未审查")
-        
+
         else:
             st.info("请从左侧选择一个段落进行政治审查")
 
@@ -444,14 +427,6 @@ def Political_censorship():
 def main():
     initialization()
     st.title("论文润色与处理工具")
-
-    if st.sidebar.button("清除所有记录"):
-        keys_to_keep = ['previous_page']
-        for key in list(st.session_state.keys()):
-            if key not in keys_to_keep:
-                del st.session_state[key]
-        initialization()
-        st.rerun()
 
     with st.sidebar:
         def on_file_change():
@@ -466,20 +441,38 @@ def main():
             st.session_state.paragraph_to_censor = ""
             st.session_state.censorship_results = {}
             st.session_state.censorship_result = None
+            st.session_state.file_type = None
             if 'previous_TEX_content' in st.session_state:
                 del st.session_state['previous_TEX_content']
 
+        if st.button("清除所有记录"):
+            keys_to_keep = ['previous_page']
+            for key in list(st.session_state.keys()):
+                if key not in keys_to_keep:
+                    del st.session_state[key]
+            initialization()
+            st.rerun()
+
         st.session_state.uploaded_file = st.file_uploader(
             "选择文件",
-            type=['tex'],
+            type=['tex', 'doc', 'docx'],
             key="file_uploader",
             on_change=on_file_change
         )
 
-        st.sidebar.markdown("### 模型选择")
+        st.markdown("### 模型选择")
+        if st.session_state.TEX_content is not None:
+            file_extension = '.tex' if st.session_state.file_type == 'tex' else '.docx'
+            st.download_button(
+                label=f"下载 {file_extension.upper()} 文件",
+                data=st.session_state.TEX_content,
+                file_name=f"{os.path.splitext(st.session_state.uploaded_file.name)[0]}_processed{file_extension}",
+                mime="text/plain",
+                key="download_tex_button"
+            )
 
         model_names = list(HIGHSPEED_MODEL_MAPPING.keys())
-        selected_model_name = st.sidebar.selectbox(
+        selected_model_name = st.selectbox(
             "选择模型",
             options=model_names,
             index=0
