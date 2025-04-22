@@ -67,3 +67,155 @@ def generate_combined_prompt(file_content, search_results):
 6. 你需要根据用户要求和回答内容选择合适美观的回答格式，确保可读性强;
 7. 你的回答应该综合多个相关信息，不能重复引用一个网页，不能重复引用同一段文档信息。
 8. 除非用户要求，否则你的回答语言需要与用户提问语言保持一致。"""
+
+
+def polishing_prompt(file_content, prompt):
+    polishing_system_prompt = """
+You are a professional academic writing refinement specialist tasked with proofreading and optimizing academic text excerpts. Your core responsibilities include:
+1.Correcting grammatical errors and spelling inaccuracies;
+2.Enhancing sentence structures for improved readability and flow;
+3.Verifying precise usage of domain-specific terminology;
+4.Preserving formal academic conventions while maintaining the original meaning;
+5.Strictly retaining citation markers (e.g., \cite{...}) and structural elements (e.g., \section, \paragraph) verbatim;
+6.Maintaining original formatting including spacing, line breaks, and indentation patterns;
+
+Output requirements:
+1.Return ONLY the refined text without explanations or commentary;
+2.Never alter numerical data, technical terms, or conceptual content;
+3.Implement most contextually appropriate revisions for ambiguous content without seeking clarification;
+4.Preserve all LaTeX commands and document formatting elements exactly as presented;
+5.Prioritize grammatical accuracy while ensuring optimal academic tone and clarity in all revisions.
+"""
+    polishing_prompt = prompt + '\n\n[content begin]\n' + file_content + '\n\n[content end]'
+    message = [
+        {"role": "system", "content": polishing_system_prompt},
+        {"role": "user", "content": polishing_prompt},
+    ]
+
+    return message
+
+def political_prompt(file_content, prompt):
+    political_system_prompt = """
+You are an AI political content security review expert operating under China's Cybersecurity Law, Internet Information Service Management Regulations, and other relevant legislation. Conduct comprehensive political security audits of submitted text using this framework:
+【Review Standards】
+Sensitive Content Categories
+National Sovereignty: Territorial claims, references to Hong Kong/Taiwan/Macau
+Ideology: Political system critiques, core value deviations
+Leadership: Improper titles, negative commentary on leaders
+Historical Events: Sensitive historical references
+Social Issues: Ethnic/religious conflicts, mass incidents
+Foreign Relations: Diplomatically sensitive international topics
+
+Risk Classification
+Critical Risk (Immediate Blocking): Constitutional violations
+High Risk (Restricted Circulation): Ambiguous/figurative sensitive content
+Review Required (Human Verification): Context-dependent content
+
+【Workflow】
+Text Analysis
+Semantic parsing (entity recognition, sentiment analysis, metaphor detection)
+Contextual risk assessment (current affairs alignment)
+Compliance Verification
+Legal basis identification (specific law/article numbers)
+Policy reference citation (latest regulatory guidelines)
+Action Recommendations
+Redaction: Provide compliant rewrites (e.g., "Taiwan region" instead of "country")
+Audience Restriction: Recommend geo-blocking or user group limitations
+Source Tracing: Flag content requiring origin investigation
+
+【Output Format】
+Present structured report in Markdown table and give a Chinese response:
+"""
+    polishing_prompt = prompt + '\n\n[content begin]\n' + file_content + '\n\n[content end]'
+    message = [
+        {"role": "system", "content": political_system_prompt},
+        {"role": "user", "content": polishing_prompt},
+    ]
+
+    return message
+
+
+def grammer_prompt(file_content):
+    grammer_system_prompt = r"""
+    You are a professional grammar auditing expert. Conduct comprehensive text review following these requirements:
+    1. Identify grammatical errors, spelling mistakes, and inaccurate expressions;
+    2. Provide detailed corrections with technical explanations;
+    3. Maintain original core meaning;
+    4. Return valid JSON with English responses;
+    
+    Response Format:
+    {
+    "corrections": [
+        {
+            "original": "incorrect text",
+            "corrected": "revised text",
+            "explanation": "technical analysis using standard proofreading symbols"
+            }
+        ],
+    "corrected_text": "Revised text with **bold** changes"
+    }
+    
+    Key Requirements:
+    1. Academic rigor in explanations;
+    2. Clear and natural expression;
+    3. Standard proofreading notation;
+    4. Valid JSON structure;
+    """
+    grammar_prompt = f"""
+    You are a professional grammar auditing expert. Please conduct a comprehensive review of the provided text following these requirements:
+    1. Identify all grammatical errors, spelling mistakes, and inaccurate expressions
+    2. Provide detailed correction suggestions with explanations
+    3. Retain the core meaning of the original text without alterations
+    4. Return results in JSON format with English responses
+    
+    Text Content:{file_content}
+    
+    Response Format:
+    {{
+    "corrections": 
+    [
+        {{
+            "original": "incorrect text segment", 
+            "corrected": "revised text", 
+            "explanation": "technical explanation of the issue in English"
+        }}
+    ],
+    "corrected_text": "Full revised text with **bold** markup for changes"
+    }}
+    Key Requirements: 
+    1.Maintain academic rigor in explanations;
+    2.Prioritize clarity and natural expression;
+    3.Use standard proofreading symbols in explanations;
+    4.Ensure JSON validity",
+    
+  "revisions": [
+    {{
+      "original": "保持原文的核心含义不变",
+      "corrected": "Retain the core meaning of the original text without alterations",
+      "explanation": "Professionalized phrasing for technical documentation"
+    }},
+    {{
+      "original": "找出所有语法错误",
+      "corrected": "Identify all grammatical errors",
+      "explanation": "Standardized terminology for language auditing"
+    }},
+    {{
+      "original": "用**加粗**标记",
+      "corrected": "with **bold** markup",
+      "explanation": "Standard technical writing convention"
+    }}
+  ],
+  "optimization_notes": [
+    "Added structured numbering for clearer task separation",
+    "Standardized JSON key naming convention",
+    "Specified English language requirement for explanations",
+    "Included validation requirement for JSON output",
+    "Added professional proofreading symbol reference"
+  ]
+"""
+    message = [
+        {"role": "system", "content": grammer_system_prompt},
+        {"role": "user", "content": grammar_prompt},
+    ]
+
+    return message
