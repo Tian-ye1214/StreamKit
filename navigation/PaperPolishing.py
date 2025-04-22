@@ -67,7 +67,7 @@ def initialization():
         st.session_state.censorship_results = {}
 
 
-def polish_text_with_llm(message):
+def polish_text_with_llm(message, temperature=0.6):
     try:
         st.subheader("润色结果")
         content = ""
@@ -81,7 +81,7 @@ def polish_text_with_llm(message):
             for chunk in st.session_state.Client.chat.completions.create(
                     model=model,
                     messages=message,
-                    temperature=1.0,
+                    temperature=temperature,
                     stream=True
             ):
                 if chunk.choices and len(chunk.choices) > 0:
@@ -206,7 +206,7 @@ def TEX_Polishing():
                 st.session_state.polished_paragraph = None
                 with st.spinner("正在调用 LLM 进行润色..."):
                     message = polishing_prompt(st.session_state.paragraph_to_polish, st.session_state.polishing_prompt)
-                    st.session_state.polished_paragraph = polish_text_with_llm(message)
+                    st.session_state.polished_paragraph = polish_text_with_llm(message, temperature=0.8)
 
             if st.session_state.polished_paragraph is not None:
                 polish_col1, polish_col2 = st.columns(2)
@@ -326,7 +326,7 @@ def Textual_polishing():
         with st.spinner("正在使用AI进行语法审查..."):
             try:
                 message = grammer_prompt(input_text)
-                result = polish_text_with_llm(message)
+                result = polish_text_with_llm(message, temperature=0.1)
                 try:
                     result_json = json.loads(result)
                     st.markdown("### 修正详情")
@@ -355,7 +355,7 @@ def Textual_polishing():
             return
         try:
             message = polishing_prompt(input_text, st.session_state.polishing_prompt)
-            polish_text_with_llm(message)
+            polish_text_with_llm(message, temperature=0.8)
         except Exception as e:
             st.warning("调用大模型出错:", e)
 
@@ -413,7 +413,7 @@ def Political_censorship():
                 with st.spinner("正在调用大模型进行政治审查..."):
                     try:
                         message = political_prompt(st.session_state.censorship_prompt, st.session_state.paragraph_to_censor)
-                        content = polish_text_with_llm(message)
+                        content = polish_text_with_llm(message, temperature=0.1)
                         st.session_state.censorship_results[
                             st.session_state.current_censorship_paragraph_index] = content
                         st.session_state.censorship_result = content
