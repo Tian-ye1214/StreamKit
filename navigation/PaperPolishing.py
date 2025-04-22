@@ -33,6 +33,8 @@ def initialization():
         st.session_state.show_all_paragraphs = True
     if "file_type" not in st.session_state:
         st.session_state.file_type = None
+    if "polished_paragraph_indices" not in st.session_state:
+        st.session_state.polished_paragraph_indices = set()
 
     if "paragraph_to_polish" not in st.session_state:
         st.session_state.paragraph_to_polish = ""
@@ -153,7 +155,12 @@ def TEX_Polishing():
                 i = st.session_state.current_polishing_paragraph_index
                 paragraph = st.session_state.tex_paragraphs[i]
                 with st.container(border=True, height=600):
-                    st.markdown(f"**段落 {i + 1}**")
+                    bg_color = "#e6ffe6" if i in st.session_state.polished_paragraph_indices else "white"
+                    st.markdown(f"""
+                    <div style="background-color: {bg_color}; padding: 10px; border-radius: 5px;">
+                        <strong>段落 {i + 1}</strong>
+                    </div>
+                    """, unsafe_allow_html=True)
                     if st.button("↩️ 返回所有段落", key="back_to_all_paragraphs"):
                         st.session_state.show_all_paragraphs = True
                         st.rerun()
@@ -165,9 +172,14 @@ def TEX_Polishing():
                                                                                         1)
             else:
                 for i, paragraph in enumerate(st.session_state.tex_paragraphs):
+                    bg_color = "#e6ffe6" if i in st.session_state.polished_paragraph_indices else "white"
                     with st.container(border=True, height=300):
-                        st.markdown(f"**段落 {i + 1}**")
-                        modified_paragraph = st.text_area("段落内容", value=paragraph, height=250, key=f"paragraph_{i}",
+                        st.markdown(f"""
+                        <div style="background-color: {bg_color}; padding: 10px; border-radius: 5px;">
+                            <strong>段落 {i + 1}</strong>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        modified_paragraph = st.text_area("", value=paragraph, height=250, key=f"paragraph_{i}",
                                                           disabled=False)
                         st.session_state.tex_paragraphs[i] = modified_paragraph
                         st.session_state.TEX_content = st.session_state.TEX_content.replace(paragraph,
@@ -186,6 +198,8 @@ def TEX_Polishing():
                 st.session_state.paragraph_to_polish = ""
                 st.session_state.polished_paragraph = None
                 st.session_state.tex_paragraphs = split_tex_into_paragraphs(st.session_state.TEX_content)
+                # 清空已润色段落的记录
+                st.session_state.polished_paragraph_indices = set()
                 st.rerun()
         else:
             st.sidebar.button("↩️ 撤销上次覆盖", key="undo_overwrite_button_disabled", disabled=True)
@@ -230,6 +244,7 @@ def TEX_Polishing():
                                 st.session_state.TEX_content = new_content
                                 st.session_state.tex_paragraphs[
                                     st.session_state.current_polishing_paragraph_index] = st.session_state.polished_paragraph
+                                st.session_state.polished_paragraph_indices.add(st.session_state.current_polishing_paragraph_index)
                                 st.success("段落已更新！")
                                 st.session_state.paragraph_to_polish = ""
                                 st.session_state.polished_paragraph = None
