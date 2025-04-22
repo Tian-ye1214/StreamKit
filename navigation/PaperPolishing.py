@@ -258,7 +258,15 @@ def Textual_polishing():
         height=200,
         key="text_input"
     )
-    if st.button("语法检查", key="check_button"):
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        check_button = st.button("LanguageTool语法检查", key="check_button")
+    with col2:
+        ai_check_button = st.button("AI语法检查", key="AI_check_button")
+    with col3:
+        ai_polish_button = st.button("AI文段润色", key="AI_Polishing_button")
+
+    if check_button:
         col1, col2 = st.columns([1, 1])
         try:
             tool = language_tool_python.LanguageTool('en-US')
@@ -309,7 +317,7 @@ def Textual_polishing():
         except Exception as e:
             st.error(f"检查过程中出现错误: {str(e)}")
 
-    if st.button("AI检查", key="AI_check_button"):
+    if ai_check_button:
         if not input_text:
             st.warning("请输入需要检查的文本！")
             return
@@ -340,6 +348,17 @@ def Textual_polishing():
                     
             except Exception as e:
                 st.error(f"AI语法审查过程中出现错误: {str(e)}")
+
+    if ai_polish_button:
+        if not input_text:
+            st.warning("请输入需要检查的文本！")
+            return
+        try:
+            message = polishing_prompt(input_text, st.session_state.polishing_prompt)
+            polish_text_with_llm(message)
+        except Exception as e:
+            st.warning("调用大模型出错:", e)
+
 
 
 def Political_censorship():
