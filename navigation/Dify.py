@@ -5,7 +5,13 @@ import json
 
 st.session_state.clear()
 st.set_page_config(page_title="Dify API 交互", layout="wide")
-st.title("Dify API 交互界面")
+st.markdown("""
+<h1 style='text-align: center;'>
+    Dify API 交互界面
+</h1>
+<div style='text-align: center; margin-bottom: 20px;'>
+</div>
+""", unsafe_allow_html=True)
 
 st.sidebar.header("输入参数")
 with st.expander("使用说明", expanded=False):

@@ -58,9 +58,9 @@ def main():
         </h3>
         """, unsafe_allow_html=True)
         sections = st.radio("",
-            ["文本对话", "视觉对话"],
-            index=0,
-        )
+                            ["文本对话", "视觉对话"],
+                            index=0,
+                            )
         if sections == '文本对话':
             model_display = st.selectbox("选择模型", list(MODEL_MAPPING.keys()), index=1, help="选择模型")
             st.session_state.model = MODEL_MAPPING[model_display]
@@ -72,7 +72,7 @@ def main():
             st.session_state.system_prompt = "You are a helpful assistant."
 
         backend.parameter_configuration()
-        st.sidebar.markdown("联系作者")
+        st.markdown("联系作者")
         st.markdown(f"""
         📧 [Z1092228927@outlook.com](mailto:Z1092228927@outlook.com)<br>
         🐱 [Tian-ye1214](https://github.com/Tian-ye1214)
@@ -95,10 +95,11 @@ def main():
             except Exception as e:
                 st.error(f"生成回答时出错: {str(e)}")
 
+
 if 'previous_page' not in st.session_state:
     st.session_state.previous_page = 'chat'
 current_page = 'chat'
 if current_page != st.session_state.previous_page:
-        st.session_state.clear()
-        st.session_state.previous_page = current_page
+    st.session_state.clear()
+    st.session_state.previous_page = current_page
 main()

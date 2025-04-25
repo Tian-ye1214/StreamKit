@@ -91,7 +91,13 @@ def flux_generation(model_name, prompt, width, height):
 
 def main():
     st.set_page_config(layout="wide")
-    st.title("Image Generation")
+    st.markdown("""
+    <h1 style='text-align: center;'>
+        Image Generation
+    </h1>
+    <div style='text-align: center; margin-bottom: 20px;'>
+    </div>
+    """, unsafe_allow_html=True)
     
     if 'img_model' not in st.session_state:
         st.session_state.img_model = None

@@ -142,7 +142,13 @@ def main():
             translate_button = st.button("开始翻译", type="primary", use_container_width=True)
             cancel_button = st.button("取消", type="secondary", use_container_width=True)
 
-    st.title("PDF文档翻译器")
+    st.markdown("""
+    <h1 style='text-align: center;'>
+        PDF固版翻译
+    </h1>
+    <div style='text-align: center; margin-bottom: 20px;'>
+    </div>
+    """, unsafe_allow_html=True)
     with st.expander("使用说明", expanded=False):
         st.markdown("""
         🌟 **保留PDF格式的翻译器** 🌟

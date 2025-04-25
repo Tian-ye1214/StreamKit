@@ -388,6 +388,13 @@ def news_generation(system, use_custom_template):
 
 def main():
     initialization()
+    st.markdown("""
+    <h1 style='text-align: center;'>
+        天眸预警 -- 实时天气预警查询
+    </h1>
+    <div style='text-align: center; margin-bottom: 20px;'>
+    </div>
+    """, unsafe_allow_html=True)
     with st.sidebar:
         model_names = list(HIGHSPEED_MODEL_MAPPING.keys())
         selected_model_name = st.selectbox(

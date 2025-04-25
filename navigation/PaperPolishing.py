@@ -1,348 +1,638 @@
-# -*- coding: utf-8 -*-
 import streamlit as st
 import os
-import random
-import tempfile
-import networkx as nx
-from pyvis.network import Network
-from pages.lightrag.lightrag import LightRAG, QueryParam
-from pages.lightrag.llm.openai import openai_complete_if_cache, openai_embed
-from pages.lightrag.utils import EmbeddingFunc
-from pages.Functions.ExtractFileContents import extract_text
-from pages.Functions.Constants import EMBEDDING_MODEL_MAPPING, HIGHSPEED_MODEL_MAPPING
+import re
+from openai import OpenAI
+import language_tool_python
+from pages.Functions.Constants import HIGHSPEED_MODEL_MAPPING
 
 
-async def llm_model_func(prompt, system_prompt=None, history_messages=[], **kwargs) -> str:
-    return await openai_complete_if_cache(
-        st.session_state.llm_model,
-        prompt,
-        system_prompt=system_prompt,
-        history_messages=history_messages,
-        api_key=os.environ.get('ZhiZz_API_KEY'),
-        base_url=os.environ.get('ZhiZz_URL'),
-        **kwargs,
-    )
-
-
-async def embedding_func(texts: list[str]):
-    return await openai_embed(
-        texts,
-        model=st.session_state.embedding_model,
-        api_key=os.environ.get('SiliconFlow_API_KEY'),
-        base_url=os.environ.get('SiliconFlow_URL'),
-    )
-
-
-def get_user_working_dir(filename=None):
-    base_dir = "user_workspaces"
-    os.makedirs(base_dir, exist_ok=True)
-
-    if not filename:
-        raise ValueError("必须提供文件名来创建工作目录")
-
-    dirname = os.path.splitext(filename)[0]
-    return os.path.join(base_dir, dirname)
-
-
-def init_rag(filename=None):
-    if not filename:
-        raise ValueError("必须提供文件名来初始化RAG")
-
-    working_dir = get_user_working_dir(filename)
-    if os.path.exists(working_dir):
-        st.info(f"检测到已存在的知识库：{os.path.basename(working_dir)}")
-    else:
-        os.makedirs(working_dir)
-        st.success(f"创建新的知识库：{os.path.basename(working_dir)}")
-
-    rag = LightRAG(
-        working_dir=working_dir,
-        llm_model_func=llm_model_func,
-        embedding_func=EmbeddingFunc(
-            embedding_dim=1024,
-            max_token_size=8192,
-            func=embedding_func),
-        addon_params={"language": "Simplified Chinese"}
-    )
-    return rag
-
-
-@st.cache_data
-def load_knowledge_graph(graph_path, show_isolated=False):
-    """加载并缓存知识图谱数据"""
-    if not os.path.exists(graph_path):
-        return None
-
-    try:
-        G = nx.read_graphml(graph_path)
-        if not show_isolated:
-            G.remove_nodes_from(list(nx.isolates(G)))
-
-        net = Network(height="100vh", notebook=True, directed=False)
-        net.from_nx(G)
-        for node in net.nodes:
-            node["color"] = "#{:06x}".format(random.randint(0, 0xFFFFFF))
-            if "description" in node:
-                node["title"] = node["description"]
-
-        for edge in net.edges:
-            if "description" in edge:
-                edge["title"] = edge["description"]
-            edge["width"] = 2
-
-        temp_dir = tempfile.gettempdir()
-        temp_path = os.path.join(temp_dir, f'graph_{random.randint(0, 999999)}.html')
-        net.show(temp_path)
-        html_content = _load_temp_graph(temp_path)
-
-        return html_content
-    except Exception as e:
-        st.warning(f"知识图谱显示失败: {str(e)}")
-        return None
-
-
-def _load_temp_graph(temp_path):
-    with open(temp_path, 'r', encoding='utf-8') as f:
-        html_content = f.read()
-
-    custom_js = """
-    <script>
-    // 等待网络图加载完成
-    network.on("click", function(event) {
-        if (event.nodes.length > 0) {
-            var clickedNode = event.nodes[0];
-            var allNodes = network.body.data.nodes.getIds();
-            var connectedNodes = network.getConnectedNodes(clickedNode);
-
-            // 隐藏所有节点
-            allNodes.forEach(function(nodeId) {
-                network.body.data.nodes.update({
-                    id: nodeId,
-                    hidden: true
-                });
-            });
-
-            // 显示点击的节点及其相连的节点
-            network.body.data.nodes.update({
-                id: clickedNode,
-                hidden: false
-            });
-            connectedNodes.forEach(function(nodeId) {
-                network.body.data.nodes.update({
-                    id: nodeId,
-                    hidden: false
-                });
-            });
-
-            // 更新网络图
-            network.redraw();
-        } else {
-            // 点击空白区域时显示所有节点
-            var allNodes = network.body.data.nodes.getIds();
-            allNodes.forEach(function(nodeId) {
-                network.body.data.nodes.update({
-                    id: nodeId,
-                    hidden: false
-                });
-            });
-            network.redraw();
-        }
-    });
-    </script>
+def initialization():
     """
-    return html_content.replace('</body>', custom_js + '</body>')
+    初始化函数：设置应用程序的初始状态
+    使用Streamlit的session_state来存储应用程序的状态信息
+    保存内容为操作记录、状态信息、调用的LLM等
+    """
+    if "Client" not in st.session_state:
+        st.session_state.Client = OpenAI(api_key=os.environ.get('ZhiZz_API_KEY'), base_url=os.environ.get('ZhiZz_URL'))
+    if "uploaded_file" not in st.session_state:
+        st.session_state.uploaded_file = None
+    if "TEX_content" not in st.session_state:
+        st.session_state.TEX_content = None
+    if "tex_history" not in st.session_state:
+        st.session_state.tex_history = []
+    if "tex_paragraphs" not in st.session_state:
+        st.session_state.tex_paragraphs = []
+    if "current_polishing_paragraph_index" not in st.session_state:
+        st.session_state.current_polishing_paragraph_index = None
+    if "show_all_paragraphs" not in st.session_state:
+        st.session_state.show_all_paragraphs = True
+
+    if "paragraph_to_polish" not in st.session_state:
+        st.session_state.paragraph_to_polish = ""
+    if "polishing_prompt" not in st.session_state:
+        st.session_state.polishing_prompt = ("你是一位学术论文评审专家，你的任务评审下述文章段落，并："
+                                             "1. 修正语法错误和拼写错误； "
+                                             "2. 优化句式结构提升流畅性； "
+                                             "3. 确保专业术语准确； "
+                                             "4. 维持学术写作规范。请严格确保输出仅包含润色后的文段，不要包含任何解释、说明、注释等内容;"
+                                             "5. 不要修改任何引用、段落标记内容，如\\cite、\\section。"
+                                             "6. 不要修改格式内容，如换行、缩进、空格。格式请与原文保持一致"
+                                             "修改过程需保持原文核心含义不变，不得更改专业术语和数据信息。")
+    if "polished_paragraph" not in st.session_state:
+        st.session_state.polished_paragraph = None
+    if "selected_model" not in st.session_state:
+        st.session_state.selected_model = "deepseek-chat"
+    if "censorship_prompt" not in st.session_state:
+        st.session_state.censorship_prompt = ("你是一位政治审查专家，你的任务是对下述文章进行政治审查，并："
+                                             "1. 识别可能存在的政治敏感内容；"
+                                             "2. 评估内容的政治倾向性；"
+                                             "3. 指出可能违反国家法律法规的内容；"
+                                             "4. 提供详细的审查意见。")
+    if "censorship_result" not in st.session_state:
+        st.session_state.censorship_result = None
+    if "current_censorship_paragraph_index" not in st.session_state:
+        st.session_state.current_censorship_paragraph_index = None
+    if "show_all_censorship_paragraphs" not in st.session_state:
+        st.session_state.show_all_censorship_paragraphs = True
+    if "paragraph_to_censor" not in st.session_state:
+        st.session_state.paragraph_to_censor = ""
+    if "censorship_results" not in st.session_state:
+        st.session_state.censorship_results = {}
 
 
-@st.cache_data
-def display_knowledge_graph(working_dir, show_isolated=False):
-    """显示知识图谱"""
-    graph_path = os.path.join(working_dir, 'graph_chunk_entity_relation.graphml')
-    html_content = load_knowledge_graph(graph_path, show_isolated)
+def polish_text_with_llm(text, prompt):
+    """
+    使用大语言模型对文本进行润色
+    
+    参数:
+        text (str): 需要润色的文本内容
+        prompt (str): 润色的提示词
+    
+    返回:
+        str: 润色后的文本内容
+    """
+    # 系统提示词，指导大语言模型的行为
+    system_prompt = """
+    You are a professional academic writing optimization assistant specializing in refining and proofreading academic document excerpts. 
+    Your core tasks are: 
+    1. Correct grammatical errors and spelling mistakes 
+    2. Optimize sentence structures for improved fluency 
+    3. Ensure accurate usage of technical terminology 
+    4. Maintain academic writing standards. Strictly provide ONLY the polished text without any explanations, notes, or additional comments. 
+    5. Do not modify any citation or paragraph mark content, such as \\cite, \\section.
+    6. Do not modify the formatting, such as line breaks, indents, and spaces. Please keep the format consistent with the original text.
+    Preserve the original meaning and never alter technical terms or numerical data. 
+    When encountering ambiguous content requiring author confirmation, directly implement the most reasonable revision.
+    """
+    try:
+        st.subheader("润色结果")
+        content = ""  # 存储润色后的内容
+        reasoning_content = ""  # 存储推理过程内容
 
-    if html_content:
-        with st.expander("知识图谱说明"):
-            st.info("👇 这是从文档中提取的知识图谱，展示了文档中的实体及其关系。您可以：\n"
-                    "- 拖动节点调整布局\n"
-                    "- 滚轮缩放图谱\n"
-                    "- 鼠标悬停在节点上查看详细信息\n"
-                    "- 点击节点查看节点子图\n"
-                    "- 点击空白部分显示全部节点\n")
-        st.components.v1.html(html_content, height=800)
-    else:
-        st.info("暂无知图谱数据")
+        # 获取选择的模型
+        model = st.session_state.get("selected_model", "deepseek-chat")
+            
+        # 创建一个容器来显示润色结果
+        with st.container(height=300):
+            reason_placeholder = st.empty()  # 创建推理内容的占位符
+            message_placeholder = st.empty()  # 创建润色结果的占位符
+            
+            # 调用大语言模型API进行润色
+            for chunk in st.session_state.Client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": f"{prompt}\n\n文段内容：{text}"}
+                    ],
+                    temperature=1.0,
+                    stream=True
+            ):
+                # 处理每个返回的文本块
+                if chunk.choices and len(chunk.choices) > 0:
+                    delta = chunk.choices[0].delta
+                    if getattr(delta, 'reasoning_content', None):
+                        reasoning_content += delta.reasoning_content
+                        reason_placeholder.markdown(
+                            f"<div style='background:#f0f0f0; border-radius:5px; padding:10px; margin-bottom:10px; font-size:14px;'>"
+                            f"🤔 {reasoning_content}</div>",
+                            unsafe_allow_html=True
+                        )
+                    if delta and delta.content is not None:
+                        content += delta.content
+                        message_placeholder.markdown(
+                            f"<div style='font-size:16px; margin-top:10px;'>{content}</div>",
+                            unsafe_allow_html=True
+                        )
+
+        return content
+    except Exception as e:
+        st.error(f"调用大模型时出错: {str(e)}")
+        return None
 
 
-def _process_uploaded_file(uploaded_file):
-    with st.spinner('正在处理文档(首次处理文档会比较慢，请耐心等待哦)...'):
-        current_file = st.session_state.get('current_file', None)
-        if current_file != uploaded_file.name:
-            st.session_state.current_file = uploaded_file.name
-            st.session_state.rag = init_rag(uploaded_file.name)
-            st.session_state.has_document = False  # 重置文档状态
-            st.session_state.messages = []  # 清空历史消息
+def split_tex_into_paragraphs(tex_content):
+    """
+    将TEX文件内容分割成段落
+    
+    参数:
+        tex_content (str): TEX文件内容
+    
+    返回:
+        list: 段落列表
+    """
+    # 移除常见的命令和环境声明
+    tex_content = re.sub(r'(?<!\\)%.*$', '', tex_content, flags=re.MULTILINE)
+    tex_content = re.sub(r'\\documentclass.*?{.*?}', '', tex_content)
+    tex_content = re.sub(r'\\usepackage(\[.*?\])?{.*?}', '', tex_content)
+    tex_content = re.sub(r'\\begin{document}', '', tex_content)
+    tex_content = re.sub(r'\\end{document}', '', tex_content)
+    tex_content = re.sub(r'\\maketitle', '', tex_content)
+    tex_content = re.sub(r'\\usetikzlibrary.*?$', '', tex_content, flags=re.MULTILINE)
+    tex_content = re.sub(r'\\bibliographystyle\{.*?\}', '', tex_content)
+    tex_content = re.sub(r'\\bibliography\{.*?\}', '', tex_content)
+    tex_content = re.sub(r'\\tableofcontents', '', tex_content)
+    tex_content = re.sub(r'\\listoffigures', '', tex_content)
+    tex_content = re.sub(r'\\listoftables', '', tex_content)
+    tex_content = re.sub(r'\\setcounter\{.*?\}\{.*?\}', '', tex_content)
+    tex_content = re.sub(r'\\graphicspath\{.*?\}', '', tex_content)
+    tex_content = re.sub(r'\\newcommand\{.*?\}\{.*?\}', '', tex_content)
+    tex_content = re.sub(r'\\renewcommand\{.*?\}\{.*?\}', '', tex_content)
+    tex_content = re.sub(r'\\label\{.*?\}', '', tex_content)
 
-        if not st.session_state.has_document:
-            content = extract_text(uploaded_file)
-            if content:
-                st.session_state.rag.insert(content)
-                st.success('文档处理完成！')
-                st.session_state.has_document = True
+    # 按空行分割段落
+    paragraphs = [p.strip() for p in tex_content.split('\n\n') if p.strip()]
+
+    # 如果段落数量太少，尝试按换行符分割
+    if len(paragraphs) < 3:
+        paragraphs = [p.strip() for p in tex_content.split('\n') if p.strip()]
+
+    # 过滤掉只包含命令的段落（如只有\section{}的段落）
+    filtered_paragraphs = []
+    for p in paragraphs:
+        # 如果段落只包含单一的命令（如\section{}），或者是空段落，则跳过
+        if not p or re.match(r'^\s*\\(section|subsection|subsubsection|paragraph|title|author|date|label)\{.*?\}\s*$',
+                             p):
+            continue
+        # 如果段落长度过短且不包含实质性文本内容，则跳过
+        if len(p) < 10 and not re.search(r'[a-zA-Z\u4e00-\u9fa5]', p):
+            continue
+        filtered_paragraphs.append(p)
+
+    # 如果没有找到任何段落，返回整个内容作为一个段落
+    if not filtered_paragraphs:
+        filtered_paragraphs = [tex_content]
+
+    return filtered_paragraphs
+
+
+def TEX_Polishing():
+    """
+    TEX文件润色功能
+    提供TEX文件的段落润色功能，包括段落选择、润色和应用
+    """
+    # 创建两列布局
+    col1, col2 = st.columns([1, 1])
+    # --- 左栏：展示段落列表 ---
+    with col1:
+        st.session_state.TEX_content = st.session_state.uploaded_file.getvalue().decode('utf-8') if st.session_state.TEX_content is None else st.session_state.TEX_content
+        st.session_state.tex_paragraphs = split_tex_into_paragraphs(st.session_state.TEX_content)
+        st.subheader("TEX 文件内容（原始段落）")
+
+        # 创建段落显示容器
+        with st.container(height=800, border=False):
+            # 如果当前正在润色某个段落，只显示该段落
+            if st.session_state.current_polishing_paragraph_index is not None and not st.session_state.show_all_paragraphs:
+                i = st.session_state.current_polishing_paragraph_index
+                paragraph = st.session_state.tex_paragraphs[i]
+                with st.container(border=True, height=600):
+                    st.markdown(f"**段落 {i + 1}**")
+                    if st.button("↩️ 返回所有段落", key="back_to_all_paragraphs"):
+                        st.session_state.show_all_paragraphs = True
+                        st.rerun()
+                    # 段落编辑区域
+                    modified_paragraph = st.text_area("段落详细内容", value=paragraph, height=500, key=f"Paragraph_details_{i}", disabled=False)
+                    st.session_state.paragraph_to_polish = modified_paragraph
+                    st.session_state.tex_paragraphs[i] = modified_paragraph
+                    st.session_state.TEX_content = st.session_state.TEX_content.replace(paragraph, modified_paragraph, 1)
+            else:
+                # 显示所有段落
+                for i, paragraph in enumerate(st.session_state.tex_paragraphs):
+                    with st.container(border=True, height=300):
+                        st.markdown(f"**段落 {i + 1}**")
+                        # 段落编辑区域
+                        modified_paragraph = st.text_area("段落内容", value=paragraph, height=250, key=f"paragraph_{i}", disabled=False)
+                        st.session_state.tex_paragraphs[i] = modified_paragraph
+                        st.session_state.TEX_content = st.session_state.TEX_content.replace(paragraph, modified_paragraph, 1)
+                        # 点击润色后，重置状态
+                        if st.button(f"润色该段落", key=f"polish_btn_{i}"):
+                            st.session_state.current_polishing_paragraph_index = i
+                            st.session_state.paragraph_to_polish = modified_paragraph
+                            st.session_state.show_all_paragraphs = False
+                            st.rerun()
+
+        # 下载按钮
+        st.sidebar.download_button(
+            label="下载 TEX 文件",
+            data=st.session_state.TEX_content,
+            file_name=f"{os.path.splitext(st.session_state.uploaded_file.name)[0]}_processed.tex",
+            mime="text/plain",
+            key="download_tex_button"
+        )
+
+        # 撤销操作按钮
+        if st.session_state.tex_history:
+            if st.sidebar.button(f"↩️ 撤销上次覆盖 ({len(st.session_state.tex_history)}步可撤销)",
+                                 key="undo_overwrite_button"):
+                st.session_state.TEX_content = st.session_state.tex_history.pop()
+                st.success("已撤销上次覆盖操作！")
+                st.session_state.paragraph_to_polish = ""
+                st.session_state.polished_paragraph = None
+                st.session_state.tex_paragraphs = split_tex_into_paragraphs(st.session_state.TEX_content)
+                st.rerun()
+        else:
+            st.sidebar.button("↩️ 撤销上次覆盖", key="undo_overwrite_button_disabled", disabled=True)
+
+    # --- 右栏：润色交互 ---
+    with col2:
+        if st.session_state.current_polishing_paragraph_index is not None and st.session_state.paragraph_to_polish:
+            st.subheader("段落润色")
+
+            # 润色提示词编辑区域
+            st.session_state.polishing_prompt = st.text_area(
+                "润色要求 (Prompt):",
+                value=st.session_state.polishing_prompt,
+                height=100,
+                key="prompt_input"
+            )
+
+            # 开始润色按钮
+            if st.button("开始润色", key="start_polish_button"):
+                st.session_state.polished_paragraph = None
+                with st.spinner("正在调用 LLM 进行润色..."):
+                    st.session_state.polished_paragraph = polish_text_with_llm(
+                        st.session_state.paragraph_to_polish,
+                        st.session_state.polishing_prompt
+                    )
+
+            if st.session_state.polished_paragraph is not None:
+                polish_col1, polish_col2 = st.columns(2)
+                with polish_col1:
+                    # 应用润色结果按钮
+                    if st.button("✅ 应用润色结果", key="apply_polish_button"):
+                        # 保存当前内容到历史记录
+                        st.session_state.tex_history.append(st.session_state.TEX_content)
+
+                        # 获取原始段落
+                        original_paragraph = st.session_state.tex_paragraphs[
+                            st.session_state.current_polishing_paragraph_index]
+
+                        try:
+                            # 替换段落内容
+                            new_content = st.session_state.TEX_content.replace(
+                                original_paragraph,
+                                st.session_state.polished_paragraph,
+                                1
+                            )
+
+                            # 检查替换是否成功
+                            if new_content == st.session_state.TEX_content:
+                                st.error("替换失败：请尝试手动更新")
+                            else:
+                                st.session_state.TEX_content = new_content
+                                st.session_state.tex_paragraphs[
+                                    st.session_state.current_polishing_paragraph_index] = st.session_state.polished_paragraph
+                                st.success("段落已更新！")
+                                # 重置状态
+                                st.session_state.paragraph_to_polish = ""
+                                st.session_state.polished_paragraph = None
+                                st.session_state.current_polishing_paragraph_index = None
+                                st.session_state.show_all_paragraphs = True
+                                st.rerun()
+                        except Exception as e:
+                            st.error(f"应用修改时出错: {str(e)}")
+
+                with polish_col2:
+                    # 取消按钮
+                    if st.button("❌ 取消", key="cancel_polish_button"):
+                        # 重置状态
+                        st.session_state.polished_paragraph = None
+                        st.session_state.paragraph_to_polish = ""
+                        st.session_state.current_polishing_paragraph_index = None
+                        st.session_state.show_all_paragraphs = True
+                        st.rerun()
+
+        elif st.session_state.TEX_content is not None:
+            st.info("请从左侧选择一个段落进行润色")
+
+
+def Textual_polishing():
+    """
+    文本拼写检查功能
+    提供普通文本的语法和拼写检查功能
+    """
+    st.subheader("文本拼写检查")
+    # 文本输入区域
+    input_text = st.text_area(
+        "请输入需要检查的文本：",
+        height=200,
+        key="text_input"
+    )
+    if st.button("开始检查", key="check_button"):
+        col1, col2 = st.columns([1, 1])
+        try:
+            tool = language_tool_python.LanguageTool('en-US')
+            # 检查文本
+            matches = tool.check(input_text)
+            tool.close()
+
+            # 过滤掉所有Possible spelling mistake found类型的错误
+            filtered_matches = [match for match in matches if match.message != 'Possible spelling mistake found.']
+            
+            if not filtered_matches:
+                st.success("未发现语法或拼写错误！")
+            else:
+                with col1:
+                    # 展示错误详情
+                    st.markdown("### 错误详情")
+                    for i, match in enumerate(filtered_matches):
+                        st.markdown(f"""
+                        <div style="font-size: 14px; padding: 10px; margin: 5px 0; background-color: #f5f5f5; border-radius: 4px;">
+                            <div><span style="font-weight: bold;">错误类型</span>: {match.ruleId}</div>
+                            <div><span style="font-weight: bold;">错误位置</span>: {match.offset}-{match.offset + match.errorLength}</div>
+                            <div><span style="font-weight: bold;">错误内容</span>: <span style="color: #ff4b4b;">{input_text[match.offset:match.offset + match.errorLength]}</span></div>
+                            <div><span style="font-weight: bold;">建议修改</span>: {match.replacements[0] if match.replacements else '无建议'}</div>
+                            <div><span style="font-weight: bold;">错误说明</span>: {match.message}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                with col2:
+                    # 修改预览
+                    st.markdown("### 逐条修改预览")
+                    for i, match in enumerate(filtered_matches):
+                        if match.replacements:
+                            modified_segment = (
+                                    input_text[:match.offset] +
+                                    f"**{match.replacements[0]}**" +
+                                    input_text[match.offset + match.errorLength:]
+                            )
+                            st.markdown(modified_segment)
+                            st.markdown('--------------------')
+
+                st.markdown("### 最终修改结果")
+                corrected_text = input_text
+                for match in sorted(filtered_matches, key=lambda x: -x.offset):
+                    if match.replacements:
+                        corrected_text = (
+                                corrected_text[:match.offset] +
+                                f"**{match.replacements[0]}**" +
+                                corrected_text[match.offset + match.errorLength:]
+                        )
+                st.markdown(corrected_text)
+
+        except Exception as e:
+            st.error(f"检查过程中出现错误: {str(e)}")
+
+
+def Political_censorship():
+    """
+    政治审查功能
+    提供TEX文件的政治审查功能，包括段落选择、审查和结果展示
+    """
+    # 获取TEX文件内容
+    st.session_state.TEX_content = st.session_state.uploaded_file.getvalue().decode(
+        'utf-8') if st.session_state.TEX_content is None else st.session_state.TEX_content
+    st.session_state.tex_paragraphs = split_tex_into_paragraphs(st.session_state.TEX_content)
+
+    col1, col2 = st.columns([1, 1])
+
+    # 左栏：显示段落列表
+    with col1:
+        st.subheader("TEX 文件内容（原始段落）")
+        with st.container(height=800, border=False):
+            if st.session_state.current_censorship_paragraph_index is not None and not st.session_state.show_all_censorship_paragraphs:
+                i = st.session_state.current_censorship_paragraph_index
+                paragraph = st.session_state.tex_paragraphs[i]
+                with st.container(border=True, height=600):
+                    st.markdown(f"**段落 {i + 1}**")
+                    if st.button("↩️ 返回所有段落", key="back_to_all_censorship_paragraphs"):
+                        st.session_state.show_all_censorship_paragraphs = True
+                        st.rerun()
+                    st.markdown(paragraph)
+                    st.session_state.paragraph_to_censor = paragraph
+            else:
+                for i, paragraph in enumerate(st.session_state.tex_paragraphs):
+                    with st.container(border=True, height=300):
+                        st.markdown(f"**段落 {i + 1}**")
+                        st.markdown(paragraph)
+                        if st.button(f"审查该段落", key=f"censor_btn_{i}"):
+                            st.session_state.current_censorship_paragraph_index = i
+                            st.session_state.show_all_censorship_paragraphs = False
+                            st.rerun()
+
+    # 右栏：审查交互
+    with col2:
+        if st.session_state.current_censorship_paragraph_index is not None and st.session_state.paragraph_to_censor:
+            st.subheader("段落政治审查")
+            st.markdown(f"**当前审查段落 {st.session_state.current_censorship_paragraph_index + 1}**")
+            st.markdown(st.session_state.paragraph_to_censor)
+
+            st.session_state.censorship_prompt = st.text_area(
+                "审查要求 (Prompt):",
+                value=st.session_state.censorship_prompt,
+                height=100,
+                key="censorship_prompt_input"
+            )
+
+            if st.button("开始政治审查", key="start_censorship_button"):
+                with st.spinner("正在调用大模型进行政治审查..."):
+                    system_prompt = """
+                    你是一位政治审查专家，你的任务是对下述文章段落进行政治审查，并：
+                    1. 识别可能存在的政治敏感内容；
+                    2. 评估内容的政治倾向性；
+                    3. 指出可能违反国家法律法规的内容；
+                    4. 提供详细的审查意见。
+                    请提供全面的审查报告，包括发现的问题和建议。
+                    """
+                    
+                    try:
+                        model = st.session_state.get("selected_model", "deepseek-chat")
+                        content = ""
+                        # 创建容器显示审查结果
+                        with st.container(height=300):
+                            message_placeholder = st.empty()
+                            # 调用大语言模型API进行审查
+                            for chunk in st.session_state.Client.chat.completions.create(
+                                    model=model,
+                                    messages=[
+                                        {"role": "system", "content": system_prompt},
+                                        {"role": "user", "content": f"{st.session_state.censorship_prompt}\n\n段落内容：{st.session_state.paragraph_to_censor}"}
+                                    ],
+                                    temperature=0.7,
+                                    stream=True
+                            ):
+                                # 处理每个返回的文本块
+                                if chunk.choices and len(chunk.choices) > 0:
+                                    delta = chunk.choices[0].delta
+                                    if delta and delta.content is not None:
+                                        content += delta.content
+                                        message_placeholder.markdown(
+                                            f"<div style='font-size:16px; margin-top:10px;'>{content}</div>",
+                                            unsafe_allow_html=True
+                                        )
+
+                        # 保存审查结果
+                        st.session_state.censorship_results[st.session_state.current_censorship_paragraph_index] = content
+                        st.session_state.censorship_result = content
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"调用大模型时出错: {str(e)}")
+
+            if st.session_state.current_censorship_paragraph_index in st.session_state.censorship_results:
+                st.markdown("### 审查结果")
+                st.markdown(st.session_state.censorship_results[st.session_state.current_censorship_paragraph_index])
+
+                if st.button("返回所有段落", key="return_to_all_paragraphs_censorship"):
+                    st.session_state.show_all_censorship_paragraphs = True
+                    st.rerun()
+
+        elif st.session_state.censorship_results:
+            st.subheader("所有段落审查结果摘要")
+            
+            for i, paragraph in enumerate(st.session_state.tex_paragraphs):
+                with st.expander(f"段落 {i + 1} 审查结果", expanded=False):
+                    if i in st.session_state.censorship_results:
+                        st.markdown(st.session_state.censorship_results[i])
+                    else:
+                        st.info("该段落尚未审查")
+        
+        else:
+            st.info("请从左侧选择一个段落进行政治审查")
 
 
 def main():
-    st.title("LightRAG - 基于知识图谱的检索增强生成系统")
+    """
+    主函数：应用程序的入口点
+    初始化应用程序并设置界面
+    """
+    # 初始化应用程序
+    initialization()
+    st.title("学术炼金术")
+
+    # 添加使用说明
     with st.expander("使用说明", expanded=False):
         st.markdown("""
-        🌟 **开启增强检索新时代** 🌟
+        🌟 **论文润色与处理工具使用指南** 🌟
         
-        ✅ **源项目地址**：https://github.com/HKUDS/LightRAG
-
         🧩 **系统亮点**：
         
-        ✅ 利用AI构建细粒度知识图谱<br>
-        ✅ 基于图谱内容进行增强式检索(RAG)<br>
-        ✅ 图谱内容实时展示<br>
+        ✅ 智能润色学术论文<br>
+        ✅ 语法与拼写检查<br>
+        ✅ 政治内容审查<br>
+        ✅ 支持TEX格式文件处理<br>
 
-        🛠️ **操作指南**：
-        1. 上传业务文档（合同/报告/手册等）
-        2. 选择智能查询模式
-        3. 探索动态生成的知识图谱
-        4. 获取基于上下文的精准回答
+        🛠️ **功能模块**：
+        
+        1️⃣ **文段语法检查**：<br>
+        - 输入任意文本进行语法和拼写检查<br>
+        - 显示详细错误信息及修改建议<br>
+        - 提供逐条修改预览和最终修改结果<br>
+        
+        2️⃣ **TEX文段润色**：<br>
+        - 上传TEX格式论文文件<br>
+        - 智能分段处理论文内容<br>
+        - 使用AI模型进行专业润色<br>
+        - 支持逐段润色和整体应用<br>
+        - 提供润色历史记录和撤销功能<br>
+        
+        3️⃣ **政治审查**：<br>
+        - 对论文内容进行政治敏感性审查<br>
+        - 识别潜在的政治敏感内容<br>
+        - 提供详细的审查报告<br>
 
-        🌐 **图谱交互技巧**：
-        🖱️ 右键拖动探索图谱全景<br>
-        🔍 点击节点聚焦关联网络<br>
-        🎚️ 滑动调节信息密度阈值
+        📝 **操作流程**：
+        1. 在侧边栏选择模型和上传TEX文件
+        2. 选择需要使用的功能模块
+        3. 按照界面提示进行操作
+        4. 下载处理后的文件
+
+        💡 **使用技巧**：
+        - 润色前可自定义润色提示词<br>
+        - 使用撤销功能可恢复之前的修改<br>
+        - 可随时下载处理后的文件保存结果
         """, unsafe_allow_html=True)
 
+    # 清除所有记录按钮
+    if st.sidebar.button("清除所有记录"):
+        keys_to_keep = ['previous_page']
+        for key in list(st.session_state.keys()):
+            if key not in keys_to_keep:
+                del st.session_state[key]
+        initialization()
+        st.rerun()
+
+    # 侧边栏设置
     with st.sidebar:
-        uploaded_file = st.file_uploader(
-            "上传文档",
-            type=['pdf', 'xlsx', 'xls', 'txt', 'doc', 'docx'],
-            help="支持的格式：PDF、Excel文件(xlsx/xls)、文本文件(txt), Document文件(doc/docx)"
+        # 文件上传回调函数
+        def on_file_change():
+            # 重置状态
+            st.session_state.TEX_content = None
+            st.session_state.paragraph_to_polish = ""
+            st.session_state.polished_paragraph = None
+            st.session_state.tex_history = []
+            st.session_state.tex_paragraphs = []
+            st.session_state.current_polishing_paragraph_index = None
+            st.session_state.current_censorship_paragraph_index = None
+            st.session_state.show_all_censorship_paragraphs = True
+            st.session_state.paragraph_to_censor = ""
+            st.session_state.censorship_results = {}
+            st.session_state.censorship_result = None
+            if 'previous_TEX_content' in st.session_state:
+                del st.session_state['previous_TEX_content']
+
+        # 文件上传器
+        st.session_state.uploaded_file = st.file_uploader(
+            "选择文件",
+            type=['tex'],
+            key="file_uploader",
+            on_change=on_file_change
         )
 
-        if uploaded_file is not None:
-            _process_uploaded_file(uploaded_file)
+        # 模型选择
+        st.sidebar.markdown("### 模型选择")
 
-        if 'has_document' not in st.session_state:
-            st.session_state.has_document = False
-
-        st.subheader("🤖 模型设置")
-        model_display = st.selectbox("选择模型",
-                                     list(HIGHSPEED_MODEL_MAPPING.keys()),
-                                     index=0,
-                                     help="选择模型",
-                                     key="main_model_select")
-
-        emb_model_display = st.selectbox("选择模型",
-                                         list(EMBEDDING_MODEL_MAPPING.keys()),
-                                         index=0,
-                                         help="选择用于文本向量化的模型",
-                                         key="embed_model_select")
-
-        new_llm_model = HIGHSPEED_MODEL_MAPPING[model_display]
-        new_embedding_model = EMBEDDING_MODEL_MAPPING[emb_model_display]
-
-        if (new_llm_model != st.session_state.get("llm_model") or
-                new_embedding_model != st.session_state.get("embedding_model")):
-            st.session_state.llm_model = new_llm_model
-            st.session_state.embedding_model = new_embedding_model
-            if "rag" in st.session_state and st.session_state.has_document:
-                st.session_state.rag = init_rag(st.session_state.current_file)
-                st.info("更改模型成功！")
-        st.subheader("🔍 查询模式")
-        query_mode = st.selectbox(
-            "选择查询模式",
-            options=["naive", "local", "global", "hybrid", "mix"],
-            index=4,
-            help="""- naive: 朴素模式，直接匹配最相似的文本片段
-                    - local: 局部模式，匹配最相似的实体关系及邻接实体关系
-                    - global: 全局模式，匹配最相似的实体以及间接实体关系
-                    - hybrid: local模式 + global模式
-                    - mix: naive模式 + hybrid模式""",
-            key="query_mode_select"
+        model_names = list(HIGHSPEED_MODEL_MAPPING.keys())
+        selected_model_name = st.sidebar.selectbox(
+            "选择模型",
+            options=model_names,
+            index=0
         )
+        st.session_state.selected_model = HIGHSPEED_MODEL_MAPPING[selected_model_name]
 
-        st.subheader("⚙️ 高级参数设置")
-        with st.expander("展开高级参数设置"):
-            only_need_context = st.toggle("仅返回上下文", help="开启后将只返回检索到的相关上下文，不进行LLM总结")
-            only_need_prompt = st.toggle("仅返回提示词", help="开启后将只返回生成的提示词，不进行LLM回答")
-            response_type = st.selectbox(
-                "回答格式",
-                options=["Multiple Paragraphs", "Single Paragraph", "Bullet Points"],
-                help="选择AI回答的格式样式",
-                key="response_type_select"
-            )
-            top_k = st.slider("检索数量(top_k)", min_value=10, max_value=100, value=60,
-                              help="在local模式下表示检索的实体数量，在global模式下表示检索的关系数量")
-            max_token_for_text_unit = st.slider("文本单元最大token数", min_value=1000, max_value=8000, value=4000,
-                                                help="原始文本块的最大token数量")
-            max_token_for_global_context = st.slider("全局上下文最大token数", min_value=1000, max_value=8000,
-                                                     value=4000, help="关系描述的最大token数量")
-            max_token_for_local_context = st.slider("局部上下文最大token数", min_value=1000, max_value=8000, value=4000,
-                                                    help="实体描述的最大token数量")
-            show_isolated_nodes = st.toggle("显示孤立节点", value=False, help="开启后将显示没有任何连接的节点")
-        st.subheader("🗑️ 清除历史")
-        if st.button("清除对话历史"):
-            st.session_state.rag_messages = []
-            st.success("已清除对话历史")
+    # 创建选项卡
+    tab1, tab2, tab3 = st.tabs(['文段语法检查', 'tex文段润色', '政治审查'])
+    with tab1:
+        Textual_polishing()
 
-    if not st.session_state.has_document:
-        st.warning("请先上传文档后再开始对话")
-        return
-    col1, col2 = st.columns([4, 3])
-    with col1:
-        st.subheader("💬 对话")
-        if "rag_messages" not in st.session_state:
-            st.session_state.rag_messages = []
-
-        for message in st.session_state.rag_messages:
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
-
-        if prompt := st.chat_input("输入您的问题"):
-            with st.chat_message("user"):
-                st.markdown(prompt)
-
-            st.session_state.rag_messages.append({"role": "user", "content": prompt})
-            with st.chat_message("assistant"):
-                try:
-                    assistant_response = st.session_state.rag.query(
-                        query=prompt,
-                        param=QueryParam(
-                            mode=query_mode,
-                            only_need_context=only_need_context,
-                            only_need_prompt=only_need_prompt,
-                            response_type=response_type,
-                            top_k=top_k,
-                            max_token_for_text_unit=max_token_for_text_unit,
-                            max_token_for_global_context=max_token_for_global_context,
-                            max_token_for_local_context=max_token_for_local_context,
-                        )
-                    )
-                    st.markdown(assistant_response)
-                    st.session_state.rag_messages.append({"role": "assistant", "content": assistant_response})
-
-                    if len(st.session_state.rag_messages) > 20:
-                        st.session_state.rag_messages = st.session_state.rag_messages[-20:]
-
-                except Exception as outer_e:
-                    st.error(f"处理过程发生错误: {str(outer_e)}")
-
-    with col2:
-        st.subheader("📊 知识图谱")
-        if not st.session_state.has_document:
-            st.warning("请先上传文档以生成知识图谱")
+    with tab2:
+        if st.session_state.uploaded_file is not None:
+            TEX_Polishing()
         else:
-            display_knowledge_graph(st.session_state.rag.working_dir, show_isolated_nodes)
+            st.warning("请先上传文件！")
+
+    with tab3:
+        if st.session_state.uploaded_file is not None:
+            Political_censorship()
+        else:
+            st.warning("请先上传文件！")
 
 
+# 页面状态管理
 if 'previous_page' not in st.session_state:
-    st.session_state.previous_page = 'lightRAG'
-current_page = 'lightRAG'
-print(current_page)
+    st.session_state.previous_page = 'PaperPolishing'
+current_page = 'PaperPolishing'
 if current_page != st.session_state.previous_page:
-        st.session_state.clear()
-        st.session_state.previous_page = current_page
+    st.session_state.clear()
+    initialization()
+    st.session_state.previous_page = current_page
+
+# 运行主函数
 main()

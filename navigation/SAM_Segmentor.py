@@ -225,7 +225,7 @@ def main():
     initialization()
     st.markdown("""
     <h1 style='text-align: center;'>
-        SAM2.1交互式分割页面
+        SAM2.1交互式语义分割
     </h1>
     <div style='text-align: center; margin-bottom: 20px;'>
     </div>
