@@ -69,3 +69,8 @@ streamlit run main.py
 - SAM2：语义分割
 - 其他依赖见requirements.txt
 
+## 🙏 致谢
+感谢以下开源项目的作者：
+- [@mwx66](https://github.com/mwx66)
+- [@yanyunxi](https://github.com/yanyunxi)
+
