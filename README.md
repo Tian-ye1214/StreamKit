@@ -70,7 +70,7 @@ streamlit run main.py
 - 其他依赖见requirements.txt
 
 ## 🙏 致谢
-感谢以下开源项目的作者：
+感谢以下作者对代码的贡献：
 - [@mwx66](https://github.com/mwx66)
 - [@yanyunxi](https://github.com/yanyunxi)
 
