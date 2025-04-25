@@ -308,7 +308,7 @@ def interaction(system):
         st.session_state.province_alerts = system.user_query(province)
         st.session_state.selected_alert = None
 
-    if not st.session_state.news_province_alerts:
+    if st.session_state.current_province and not st.session_state.province_alerts:
         st.error(f"\n未找到{st.session_state.current_province}预警信息，请输入省份或直辖市")
         return
 
@@ -345,7 +345,7 @@ def news_generation(system, use_custom_template):
         st.session_state.news_province_alerts = system.user_query(province)
         st.session_state.news_selected_alert = None
 
-    if not st.session_state.news_province_alerts:
+    if not st.session_state.news_province_alerts and st.session_state.news_current_province:
         st.error(f"\n未找到{st.session_state.news_current_province}预警信息，请输入省份或直辖市")
         return
 
