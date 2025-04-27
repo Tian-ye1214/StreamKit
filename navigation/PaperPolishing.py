@@ -625,14 +625,11 @@ def main():
             st.warning("请先上传文件！")
 
 
-# 页面状态管理
 if 'previous_page' not in st.session_state:
     st.session_state.previous_page = 'PaperPolishing'
 current_page = 'PaperPolishing'
 if current_page != st.session_state.previous_page:
     st.session_state.clear()
-    initialization()
     st.session_state.previous_page = current_page
 
-# 运行主函数
 main()
