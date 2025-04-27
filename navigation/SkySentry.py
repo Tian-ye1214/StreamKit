@@ -468,6 +468,5 @@ if 'previous_page' not in st.session_state:
 current_page = 'SkySentry'
 if current_page != st.session_state.previous_page:
     st.session_state.clear()
-    initialization()
     st.session_state.previous_page = current_page
 main()
