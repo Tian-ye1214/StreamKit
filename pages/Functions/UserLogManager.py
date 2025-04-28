@@ -2,6 +2,8 @@ import os
 import json
 from datetime import datetime
 import re
+import zipfile
+import io
 
 
 class UserLogManager:
@@ -11,6 +13,8 @@ class UserLogManager:
 
     def _sanitize_name(self, username):
         # 保留数字、大小写字母和汉字，移除其他所有字符
+        if username is None:
+            return ""
         sanitized = re.sub(r'[^a-zA-Z0-9\u4e00-\u9fff]', '', username)
         return sanitized[:50].strip()
 
@@ -89,3 +93,139 @@ class UserLogManager:
         """获取日志文件的完整路径"""
         user_dir = self._get_user_path(username)
         return os.path.join(user_dir, log_filename)
+
+
+class KnowledgeBaseManager(UserLogManager):
+    def __init__(self, base_path="user_knowledge"):
+        super().__init__(base_path)
+        self.knowledge_dir = base_path
+        os.makedirs(self.knowledge_dir, exist_ok=True)
+    
+    def _get_user_knowledge_path(self, username):
+        """获取用户知识库目录路径"""
+        safe_username = self._sanitize_name(username)
+        user_knowledge_dir = os.path.join(self.knowledge_dir, safe_username)
+        os.makedirs(user_knowledge_dir, exist_ok=True)
+        return user_knowledge_dir
+    
+    def save_knowledge_base(self, username, file_id, data):
+        """保存用户知识库"""
+        user_knowledge_dir = self._get_user_knowledge_path(username)
+        json_path = os.path.join(user_knowledge_dir, f"knowledge_{file_id}.json")
+        
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        
+        return json_path
+    
+    def get_knowledge_base(self, username, file_id):
+        """获取用户知识库"""
+        user_knowledge_dir = self._get_user_knowledge_path(username)
+        json_path = os.path.join(user_knowledge_dir, f"knowledge_{file_id}.json")
+        
+        if os.path.exists(json_path):
+            with open(json_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        return None
+    
+    def list_knowledge_bases(self, username):
+        """列出用户的所有知识库"""
+        user_knowledge_dir = self._get_user_knowledge_path(username)
+        if not os.path.exists(user_knowledge_dir):
+            return []
+        
+        knowledge_files = [f for f in os.listdir(user_knowledge_dir) 
+                          if f.startswith("knowledge_") and f.endswith(".json")]
+        
+        knowledge_bases = []
+        for file in knowledge_files:
+            file_id = file.replace("knowledge_", "").replace(".json", "")
+            file_path = os.path.join(user_knowledge_dir, file)
+
+            file_stat = os.stat(file_path)
+            created_time = datetime.fromtimestamp(file_stat.st_ctime).strftime("%Y-%m-%d %H:%M:%S")
+            
+            # 获取知识库内容摘要
+            with open(file_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                chunk_count = len(data)
+                # 获取第一段文本的前50个字符作为摘要
+                summary = data[0]["text"][:50] + "..." if data else "空知识库"
+            
+            knowledge_bases.append({
+                "file_id": file_id,
+                "created_time": created_time,
+                "chunk_count": chunk_count,
+                "summary": summary,
+                "file_path": file_path
+            })
+        
+        return knowledge_bases
+    
+    def delete_knowledge_base(self, username, file_id):
+        """删除用户知识库"""
+        user_knowledge_dir = self._get_user_knowledge_path(username)
+        json_path = os.path.join(user_knowledge_dir, f"knowledge_{file_id}.json")
+        
+        if os.path.exists(json_path):
+            os.remove(json_path)
+            return True
+        return False
+    
+    def download_knowledge_base(self, username, file_id):
+        """下载用户知识库"""
+        user_knowledge_dir = self._get_user_knowledge_path(username)
+        json_path = os.path.join(user_knowledge_dir, f"knowledge_{file_id}.json")
+        
+        if os.path.exists(json_path):
+            with open(json_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                zip_file.writestr(f"knowledge_{file_id}.json", 
+                                 json.dumps(data, ensure_ascii=False, indent=2))
+
+                metadata = {
+                    "username": username,
+                    "file_id": file_id,
+                    "created_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "chunk_count": len(data)
+                }
+                zip_file.writestr("metadata.json", 
+                                 json.dumps(metadata, ensure_ascii=False, indent=2))
+            
+            zip_buffer.seek(0)
+            return zip_buffer
+        return None
+    
+    def download_all_knowledge_bases(self, username):
+        """下载用户所有知识库"""
+        user_knowledge_dir = self._get_user_knowledge_path(username)
+        if not os.path.exists(user_knowledge_dir):
+            return None
+        
+        knowledge_files = [f for f in os.listdir(user_knowledge_dir) 
+                          if f.startswith("knowledge_") and f.endswith(".json")]
+        
+        if not knowledge_files:
+            return None
+
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            for file in knowledge_files:
+                file_path = os.path.join(user_knowledge_dir, file)
+                with open(file_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                zip_file.writestr(file, json.dumps(data, ensure_ascii=False, indent=2))
+
+            metadata = {
+                "username": username,
+                "export_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "knowledge_base_count": len(knowledge_files)
+            }
+            zip_file.writestr("metadata.json", 
+                             json.dumps(metadata, ensure_ascii=False, indent=2))
+        
+        zip_buffer.seek(0)
+        return zip_buffer
