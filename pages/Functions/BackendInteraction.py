@@ -26,8 +26,8 @@ class BackendInteractionLogic:
         初始化各项参数，保存在session中
         """
         if "openai_client" not in st.session_state:
-            st.session_state.openai_client = OpenAI(api_key=os.environ.get('SiliconFlow_API_KEY'),
-                                                    base_url=os.environ.get('SiliconFlow_URL'))
+            st.session_state.openai_client = OpenAI(api_key=os.environ.get('ZhiZz_API_KEY'),
+                                                    base_url=os.environ.get('ZhiZz_URL'))
         if "chat_messages" not in st.session_state:
             st.session_state.chat_messages = []
         if len(st.session_state.chat_messages) > 40:
