@@ -1,4 +1,3 @@
-# 付费模型
 MODEL_MAPPING = {
     "DeepSeek-V3-0324": "Pro/deepseek-ai/DeepSeek-V3",
     "DeepSeek-R1": "Pro/deepseek-ai/DeepSeek-R1",
@@ -11,23 +10,27 @@ MODEL_MAPPING = {
 }
 
 VISIONMODAL_MAPPING = {
-    "QvQ-72B": "Qwen/QVQ-72B-Preview",
-    "Qwen2.5-VL-72B": "Qwen/Qwen2.5-VL-72B-Instruct",
-    "Qwen2.5-VL-32B": "Qwen/Qwen2.5-VL-32B-Instruct",
-    "Qwen2.5-VL-7B": "Pro/Qwen/Qwen2.5-VL-7B-Instruct",
-    "DeepSeek-VL2": "deepseek-ai/deepseek-vl2",
-    "InternVL2": "OpenGVLab/InternVL2-26B",
-    # "Janus-pro-1B": "deepseek-ai/Janus-Pro-1B",
+    "Qwen2.5-VL-72B": "qwen2.5-vl-72b-instruct",
+    "Qwen2.5-VL-7B": "qwen2.5-vl-7b-instruct",
+    "GPT-4.1-mini": "gpt-4.1-mini",
+    "GPT-4o-mini": "gpt-4o-mini",
+    "Gemini-2.0": "gemini-2.0-flash",
+    "Claude-3.5": "claude-3-5-sonnet-20241022",
 }
 
 HIGHSPEED_MODEL_MAPPING = {
-    "DeepSeek": "deepseek-chat",
+    "DeepSeek-V3": "deepseek-chat",
+    "DeepSeek-R1": "deepseek-reasoner",
+    "通义千问3-235B": "qwen3-235b-a22b",
+    "通义千问3-30B": "qwen3-30b-a3b",
+    "通义千问3-32B": "qwen3-32b",
+    "通义千问-Max": "qwen-max-latest",
+    "智谱清言-4": "glm-4-plus",
+    "豆包": "Doubao-pro-32k",
+    "GPT-4.1-nano": "gpt-4.1-nano",
     "GPT-4.1-mini": "gpt-4.1-mini",
     "Claude3.7": "claude-3-7-sonnet-20250219",
     "Gemini-2.0-Flash": "gemini-2.0-flash",
-    "通义千问-Max": "qwen-max-latest",
-    "智谱清言": "glm-4-plus",
-    "豆包": "Doubao-pro-32k",
 }
 
 EMBEDDING_MODEL_MAPPING = {
@@ -36,20 +39,6 @@ EMBEDDING_MODEL_MAPPING = {
     "BGE-large-英文": "BAAI/bge-large-en-v1.5",
 }
 
-
-# 免费模型
-FREE_MODEL_MAPPING = {
-    "R1-Distill-Qwen-1.5B": "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B",
-    "R1-Distill-Qwen-7B": "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
-    "R1-Distill-Llama-8B": "deepseek-ai/DeepSeek-R1-Distill-Llama-8B",
-    "Qwen2.5-7B": "Qwen/Qwen2.5-7B-Instruct",
-    "Qwen2.5-Coder-7B": "Qwen/Qwen2.5-Coder-7B-Instruct",
-    "InternLM2.5-7B": "internlm/internlm2_5-7b-chat",
-    "Llama-3.1-8B": "meta-llama/Meta-Llama-3.1-8B-Instruct",
-    "GLM-4-9B": "THUDM/glm-4-9b-chat",
-    "Yi-1.5-9B": "01-ai/Yi-1.5-9B-Chat-16K",
-    "Gemma2-9b": "google/gemma-2-9b-it",
-}
 
 REASON_MODELS = [
     "Pro/deepseek-ai/DeepSeek-R1",
