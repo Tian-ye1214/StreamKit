@@ -2,7 +2,7 @@
 import streamlit as st
 from pages.Functions.BackendInteraction import BackendInteractionLogic
 from pages.Functions.Constants import (
-    MODEL_MAPPING,
+    HIGHSPEED_MODEL_MAPPING,
     REASON_MODELS,
     VISIONMODAL_MAPPING
 )
@@ -62,8 +62,8 @@ def main():
                             index=0,
                             )
         if sections == '文本对话':
-            model_display = st.selectbox("选择模型", list(MODEL_MAPPING.keys()), index=1, help="选择模型")
-            st.session_state.model = MODEL_MAPPING[model_display]
+            model_display = st.selectbox("选择模型", list(HIGHSPEED_MODEL_MAPPING.keys()), index=0, help="选择模型")
+            st.session_state.model = HIGHSPEED_MODEL_MAPPING[model_display]
         else:
             model_display = st.selectbox("选择模型", list(VISIONMODAL_MAPPING.keys()), index=1, help="选择模型")
             st.session_state.model = VISIONMODAL_MAPPING[model_display]
