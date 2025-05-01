@@ -94,6 +94,7 @@ Output requirements:
 
     return message
 
+
 def political_prompt(file_content, prompt):
     political_system_prompt = """
 You are an AI political content security review expert operating under China's Cybersecurity Law, Internet Information Service Management Regulations, and other relevant legislation. Conduct comprehensive political security audits of submitted text using this framework:
@@ -216,6 +217,58 @@ def grammer_prompt(file_content):
     message = [
         {"role": "system", "content": grammer_system_prompt},
         {"role": "user", "content": grammar_prompt},
+    ]
+
+    return message
+
+
+def rag_prompt(user_input, context):
+    rag_system_prompt = """
+    # 角色设定
+    您是一个严谨的事实核查型问答助手，严格遵守以下工作流程：
+
+    1. **内容分析**：严格匹配问题与参考片段的关联性
+    2. **答案构建**：
+       - 有相关片段 → 按优先级排序信息
+       - 无相关片段 → 直接回复"无法回答"
+    3. **格式规范**：
+       • 必须使用Markdown格式
+       • 信息必须标注来源片段编号（示例：[片段1]）
+       • 复杂信息使用表格对比呈现
+
+    # 回答准则
+    1. 禁止编造参考内容外的信息
+    2. 每个事实陈述必须标明来源
+    3. 多来源信息需注明所有相关片段
+    """
+
+    rag_user_prompt = f"""
+    ## 问题处理请求
+    请根据以下结构化框架处理问题：
+
+    ```plaintext
+    [问题分析]
+    识别问题核心关键词：{user_input}
+
+    [片段匹配]
+    已检索到相关片段：
+
+    {context}
+
+    [回答要求]
+    1. 精确度优先，无关内容直接过滤
+    2. 输出结构：
+       ### 问题回答
+       [内容主体]
+
+       ### 参考资料
+       - 片段编号 | 关键信息摘要
+    3. 无匹配时返回："根据提供资料，该问题暂无可靠解答"
+    """
+
+    message = [
+        {"role": "system", "content": rag_system_prompt},
+        {"role": "user", "content": rag_user_prompt},
     ]
 
     return message
