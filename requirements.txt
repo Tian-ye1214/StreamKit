@@ -9,8 +9,6 @@ pdf2zh
 diffusers
 
 language_tool_python
-langchain
-langchain_openai
 requests
 beautifulsoup4
 html5lib
