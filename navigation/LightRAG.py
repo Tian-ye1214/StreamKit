@@ -1,15 +1,88 @@
 # -*- coding: utf-8 -*-
 import streamlit as st
-import os
 import random
 import tempfile
 import networkx as nx
 from pyvis.network import Network
-from pages.lightrag.lightrag import LightRAG, QueryParam
 from pages.lightrag.llm.openai import openai_complete_if_cache, openai_embed
-from pages.lightrag.utils import EmbeddingFunc
 from pages.Functions.ExtractFileContents import extract_text
 from pages.Functions.Constants import EMBEDDING_MODEL_MAPPING, HIGHSPEED_MODEL_MAPPING
+import os
+import asyncio
+import logging
+import logging.config
+from pages.lightrag import LightRAG, QueryParam
+from pages.lightrag.utils import EmbeddingFunc, logger, set_verbose_debug
+from pages.lightrag.kg.shared_storage import initialize_pipeline_status
+
+# 创建全局事件循环
+loop = asyncio.new_event_loop()
+asyncio.set_event_loop(loop)
+
+
+def configure_logging():
+    """Configure logging for the application"""
+
+    # Reset any existing handlers to ensure clean configuration
+    for logger_name in ["uvicorn", "uvicorn.access", "uvicorn.error", "lightrag"]:
+        logger_instance = logging.getLogger(logger_name)
+        logger_instance.handlers = []
+        logger_instance.filters = []
+
+    # Get log directory path from environment variable or use current directory
+    log_dir = os.getenv("LOG_DIR", os.getcwd())
+    log_file_path = os.path.abspath(
+        os.path.join(log_dir, "lightrag_compatible_demo.log")
+    )
+
+    print(f"\nLightRAG compatible demo log file: {log_file_path}\n")
+    os.makedirs(os.path.dirname(log_dir), exist_ok=True)
+
+    # Get log file max size and backup count from environment variables
+    log_max_bytes = int(os.getenv("LOG_MAX_BYTES", 10485760))  # Default 10MB
+    log_backup_count = int(os.getenv("LOG_BACKUP_COUNT", 5))  # Default 5 backups
+
+    logging.config.dictConfig(
+        {
+            "version": 1,
+            "disable_existing_loggers": False,
+            "formatters": {
+                "default": {
+                    "format": "%(levelname)s: %(message)s",
+                },
+                "detailed": {
+                    "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+                },
+            },
+            "handlers": {
+                "console": {
+                    "formatter": "default",
+                    "class": "logging.StreamHandler",
+                    "stream": "ext://sys.stderr",
+                },
+                "file": {
+                    "formatter": "detailed",
+                    "class": "logging.handlers.RotatingFileHandler",
+                    "filename": log_file_path,
+                    "maxBytes": log_max_bytes,
+                    "backupCount": log_backup_count,
+                    "encoding": "utf-8",
+                },
+            },
+            "loggers": {
+                "lightrag": {
+                    "handlers": ["console", "file"],
+                    "level": "INFO",
+                    "propagate": False,
+                },
+            },
+        }
+    )
+
+    # Set the logger level to INFO
+    logger.setLevel(logging.INFO)
+    # Enable verbose debug if needed
+    set_verbose_debug(os.getenv("VERBOSE_DEBUG", "false").lower() == "true")
 
 
 async def llm_model_func(prompt, system_prompt=None, history_messages=[], **kwargs) -> str:
@@ -44,7 +117,7 @@ def get_user_working_dir(filename=None):
     return os.path.join(base_dir, dirname)
 
 
-def init_rag(filename=None):
+async def init_rag(filename=None):
     if not filename:
         raise ValueError("必须提供文件名来初始化RAG")
 
@@ -62,8 +135,12 @@ def init_rag(filename=None):
             embedding_dim=1024,
             max_token_size=8192,
             func=embedding_func),
-        addon_params={"language": "Simplified Chinese"}
+        addon_params={"language": "Simplified Chinese"},
     )
+
+    await rag.initialize_storages()
+    await initialize_pipeline_status()
+
     return rag
 
 
@@ -172,24 +249,28 @@ def display_knowledge_graph(working_dir, show_isolated=False):
         st.info("暂无知图谱数据")
 
 
-def _process_uploaded_file(uploaded_file):
+async def _process_uploaded_file(uploaded_file):
     with st.spinner('正在处理文档(首次处理文档会比较慢，请耐心等待哦)...'):
         current_file = st.session_state.get('current_file', None)
         if current_file != uploaded_file.name:
             st.session_state.current_file = uploaded_file.name
-            st.session_state.rag = init_rag(uploaded_file.name)
-            st.session_state.has_document = False  # 重置文档状态
-            st.session_state.messages = []  # 清空历史消息
+            st.session_state.rag = await init_rag(uploaded_file.name)
+            st.session_state.has_document = False
+            st.session_state.messages = []
 
         if not st.session_state.has_document:
             content = extract_text(uploaded_file)
             if content:
-                st.session_state.rag.insert(content)
-                st.success('文档处理完成！')
-                st.session_state.has_document = True
+                try:
+                    await st.session_state.rag.ainsert(content)
+                    st.success('文档处理完成！')
+                    st.session_state.has_document = True
+                except Exception as e:
+                    st.error(f"处理文档时发生错误: {str(e)}")
+                    st.session_state.has_document = False
 
 
-def main():
+async def main():
     st.title("LightRAG - 基于知识图谱的检索增强生成系统")
     with st.expander("使用说明", expanded=False):
         st.markdown("""
@@ -198,7 +279,7 @@ def main():
         ✅ **源项目地址**：https://github.com/HKUDS/LightRAG
 
         🧩 **系统亮点**：
-        
+        ✅ 异步抽取知识图谱，获得更高速的体验<br>
         ✅ 利用AI构建细粒度知识图谱<br>
         ✅ 基于图谱内容进行增强式检索(RAG)<br>
         ✅ 图谱内容实时展示<br>
@@ -223,7 +304,7 @@ def main():
         )
 
         if uploaded_file is not None:
-            _process_uploaded_file(uploaded_file)
+            await _process_uploaded_file(uploaded_file)
 
         if 'has_document' not in st.session_state:
             st.session_state.has_document = False
@@ -249,7 +330,7 @@ def main():
             st.session_state.llm_model = new_llm_model
             st.session_state.embedding_model = new_embedding_model
             if "rag" in st.session_state and st.session_state.has_document:
-                st.session_state.rag = init_rag(st.session_state.current_file)
+                st.session_state.rag = await init_rag(st.session_state.current_file)
                 st.info("更改模型成功！")
         st.subheader("🔍 查询模式")
         query_mode = st.selectbox(
@@ -308,7 +389,7 @@ def main():
             st.session_state.rag_messages.append({"role": "user", "content": prompt})
             with st.chat_message("assistant"):
                 try:
-                    assistant_response = st.session_state.rag.query(
+                    assistant_response = await st.session_state.rag.aquery(
                         query=prompt,
                         param=QueryParam(
                             mode=query_mode,
@@ -342,6 +423,7 @@ if 'previous_page' not in st.session_state:
     st.session_state.previous_page = 'lightRAG'
 current_page = 'lightRAG'
 if current_page != st.session_state.previous_page:
-        st.session_state.clear()
-        st.session_state.previous_page = current_page
-main()
+    st.session_state.clear()
+    st.session_state.previous_page = current_page
+configure_logging()
+asyncio.run(main())
