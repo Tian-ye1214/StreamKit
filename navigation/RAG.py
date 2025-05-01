@@ -39,8 +39,8 @@ class RAG:
 
     # 2. 文本切割函数
     def split_text(self, text, chunk_size=1024, special_chars=None, overlap=128):
+        # 先按特殊字符分割
         if special_chars:
-            # 先按特殊字符分割
             segments = []
             current_pos = 0
             for char in special_chars:
@@ -105,9 +105,9 @@ class RAG:
 
         # 使用模型计算分数
         with torch.no_grad():
-            inputs = tokenizer(pairs, padding=True, truncation=True, return_tensors='pt', max_length=512).to(
-                self.DEVICE)
-            scores = model(**inputs, return_dict=True).logits.view(-1, ).float().cpu().numpy()
+            inputs = tokenizer(pairs, padding=True, truncation=True, return_tensors='pt', max_length=512).to(self.DEVICE)
+            logits = model(**inputs, return_dict=True).logits.view(-1, ).float()
+            scores = torch.softmax(logits, dim=0).cpu().numpy()
 
         for i, score in enumerate(scores):
             results[i]["rerank_score"] = float(score)
@@ -205,16 +205,15 @@ def RAG_base(rag_system):
         if st.session_state.current_user:
             uploaded_files = st.file_uploader("上传文档(支持多个文件上传)", type=["pdf", "docx", "txt", "csv"], accept_multiple_files=True)
             if uploaded_files:
-                
                 for uploaded_file in uploaded_files:
                     st.write(f"正在处理文件: {uploaded_file.name}")
                     file_id = rag_system.file_hash(uploaded_file.read())
-                    uploaded_file.seek(0)
 
                     existing_kb = kb_manager.get_knowledge_base(st.session_state.current_user, file_id)
                     if existing_kb:
                         st.success(f"文件 {uploaded_file.name} 已存在知识库，无需重复构建。")
                         st.write(f"共 {len(existing_kb)} 段，已加载。")
+                        continue
                     else:
                         text = extract_text(uploaded_file)
                         chunks = rag_system.split_text(text, chunk_size=st.session_state.chunk_size,
@@ -233,8 +232,6 @@ def RAG_base(rag_system):
                         data = [{"text": chunk, "embedding": emb} for chunk, emb in zip(chunks, embeddings)]
                         kb_manager.save_knowledge_base(st.session_state.current_user, file_id, data)
                         st.success(f"文件 {uploaded_file.name} 的知识库已构建，共 {len(data)} 段。")
-                
-                st.rerun()
 
 
 def rag_with_ai(rag_system):
@@ -321,35 +318,13 @@ def knowledge_base_management():
                 else:
                     st.error("下载所有知识库失败")
             for kb in knowledge_bases:
-                col1, col2, col3 = st.columns([2, 1, 2])
+                col1, col2, col3 = st.columns([1, 2, 1])
                 with col1:
                     st.write(f"知识库: {kb['file_id']}")
                     st.write(f"创建时间: {kb['created_time']}")
                     st.write(f"段落数量: {kb['chunk_count']}段")
-                
+
                 with col2:
-                    st.subheader("操作")
-                    if st.button(f"下载", key=f"download_{kb['file_id']}"):
-                        zip_buffer = kb_manager.download_knowledge_base(st.session_state.current_user, kb['file_id'])
-                        if zip_buffer:
-                            st.download_button(
-                                label=f"点击下载",
-                                data=zip_buffer,
-                                file_name=f"knowledge_{kb['file_id']}.zip",
-                                mime="application/zip",
-                                key=f"download_btn_{kb['file_id']}"
-                            )
-                        else:
-                            st.error(f"下载知识库 {kb['file_id']} 失败")
-
-                    if st.button(f"删除", key=f"delete_{kb['file_id']}"):
-                        if kb_manager.delete_knowledge_base(st.session_state.current_user, kb['file_id']):
-                            st.success(f"知识库 {kb['file_id']} 已删除")
-                            st.rerun()
-                        else:
-                            st.error(f"删除知识库 {kb['file_id']} 失败")
-
-                with col3:
                     st.subheader("预览")
                     data = kb_manager.get_knowledge_base(st.session_state.current_user, kb['file_id'])
                     if data:
@@ -357,6 +332,31 @@ def knowledge_base_management():
                         st.text_area("内容预览", preview_text, height=150)
                     else:
                         st.info("暂无预览内容")
+                
+                with col3:
+                    st.subheader("操作")
+                    col_1, col_2 = st.columns(2)
+                    with col_1:
+                        if st.button(f"下载", key=f"download_{kb['file_id']}"):
+                            zip_buffer = kb_manager.download_knowledge_base(st.session_state.current_user, kb['file_id'])
+                            if zip_buffer:
+                                st.download_button(
+                                    label=f"点击下载",
+                                    data=zip_buffer,
+                                    file_name=f"knowledge_{kb['file_id']}.zip",
+                                    mime="application/zip",
+                                    key=f"download_btn_{kb['file_id']}"
+                                )
+                            else:
+                                st.error(f"下载知识库 {kb['file_id']} 失败")
+
+                    with col_2:
+                        if st.button(f"删除", key=f"delete_{kb['file_id']}"):
+                            if kb_manager.delete_knowledge_base(st.session_state.current_user, kb['file_id']):
+                                st.success(f"知识库 {kb['file_id']} 已删除")
+                                st.rerun()
+                            else:
+                                st.error(f"删除知识库 {kb['file_id']} 失败")
 
 
 def main():
