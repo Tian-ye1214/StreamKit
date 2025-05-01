@@ -3,10 +3,10 @@ from bs4 import BeautifulSoup
 import json
 from datetime import datetime
 import os
-from langchain_openai import ChatOpenAI
-from langchain.prompts import ChatPromptTemplate
+from openai import OpenAI
 import streamlit as st
 from pages.Functions.Constants import HIGHSPEED_MODEL_MAPPING
+from pages.Functions.Prompt import SkySentry_prompt
 
 st.markdown("""
 <style>
@@ -36,6 +36,8 @@ def initialization():
         st.session_state.news_current_province = None
     if "selected_model" not in st.session_state:
         st.session_state.selected_model = "deepseek-chat"
+    if "Client" not in st.session_state:
+        st.session_state.Client = OpenAI(api_key=os.environ.get('ZhiZz_API_KEY'), base_url=os.environ.get('ZhiZz_URL'))
 
 
 class WeatherAlertCrawler:
@@ -196,25 +198,6 @@ class WeatherAlertCrawler:
 class WeatherAlertNewsWriter:
     def __init__(self):
         self.defense_guides = self.load_defense_guides()
-        API_SECRET_KEY = os.environ.get('ZhiZz_API_KEY')
-        BASE_URL = os.environ.get('ZhiZz_URL')
-        Model = st.session_state.get("selected_model", "deepseek-chat")
-        self.llm = ChatOpenAI(
-            model=Model,
-            base_url=BASE_URL,
-            api_key=API_SECRET_KEY,
-            temperature=0,
-        )
-        self.news_template = """
-        你是气象灾害预警领域的专家，你的任务是根据以下预警信息与防御指南生成与新闻模板形式一致的气象灾害预警新闻。
-        预警信息:{alert_info}
-        防御指南：{defense_guide}
-        新闻模板：{news_template}
-        注意事项：
-        1. 生成内容必须基于给定的预警信息和防御指南；
-        2. 生成内容必须符合新闻模板的形式，但不要参照其内容；
-        3. 不要产生无关内容和虚假信息；
-        """
 
     def load_defense_guides(self):
         """加载防御指南JSON文件"""
@@ -255,42 +238,49 @@ class WeatherAlertNewsWriter:
         """
         try:
             template_content = custom_template if custom_template else DEFAULT_NEWS_TEMPLATE
-            prompt = ChatPromptTemplate.from_template(self.news_template)
-            messages = prompt.format_messages(
-                alert_info=alert_info,
-                defense_guide=defense_guide,
-                news_template=template_content
-            )
-            response = self.llm(messages)
-            return response.content
+            message = SkySentry_prompt(alert_info, defense_guide, template_content, generate_news=True)
+            self._call_llm(message)
         except Exception as e:
             st.error(f"生成新闻时发生错误：{str(e)}")
             return None
 
     def analyze_alerts(self, alerts):
-        """分析全国预警信息"""
-        analysis_prompt = """
-        请分析以下气象灾害预警信息，总结当前全国预警情况：
-        1. 重点关注哪些地区出现预警？
-        2. 主要出现了哪些类型的预警？
-        3. 预警等级分布如何？
-        4. 需要特别注意的灾害风险有哪些？
-        5. 提供表格或具体统计分析。
-        6. 以markdown格式返回。
-
-        预警信息：
-        {alerts_info}
-        """
         alerts_summary = []
         for alert in alerts:
             alerts_summary.append(
                 f"地区：{alert['title'].split('气象台')[0]}, 预警：{alert['title'].split('发布')[1].strip()}")
 
-        messages = ChatPromptTemplate.from_template(analysis_prompt).format_messages(
-            alerts_info="\n".join(alerts_summary)
-        )
-        response = self.llm(messages)
-        return response.content
+        messages = SkySentry_prompt(alerts_summary, None, None, generate_news=False)
+        self._call_llm(messages)
+
+    def _call_llm(self, messages):
+        with st.spinner("正在生成回答..."):
+            reason_placeholder = st.empty()
+            message_placeholder = st.empty()
+            content = ""
+            reasoning_content = ""
+            for chunk in st.session_state.Client.chat.completions.create(
+                    model=st.session_state.selected_model,
+                    messages=messages,
+                    temperature=0.1,
+                    max_tokens=8192,
+                    stream=True
+            ):
+                if chunk.choices and len(chunk.choices) > 0:
+                    delta = chunk.choices[0].delta
+                    if getattr(delta, 'reasoning_content', None):
+                        reasoning_content += delta.reasoning_content
+                        reason_placeholder.markdown(
+                            f"<div style='background:#f0f0f0; border-radius:5px; padding:10px; margin-bottom:10px; font-size:14px;'>"
+                            f"🤔 {reasoning_content}</div>",
+                            unsafe_allow_html=True
+                        )
+                    if delta and delta.content is not None:
+                        content += delta.content
+                        message_placeholder.markdown(
+                            f"<div style='font-size:16px; margin-top:10px;'>{content}</div>",
+                            unsafe_allow_html=True
+                        )
 
 
 class WeatherAlertSystem(WeatherAlertCrawler):
@@ -379,11 +369,8 @@ def news_generation(system, use_custom_template):
             st.info("\n防御指南：")
             st.markdown(defense_guide)
 
-            news = system.news_writer.generate_news(
-                st.session_state.news_alert_details[st.session_state.news_selected_alert],
-                defense_guide, use_custom_template)
-            st.markdown("\n生成的预警新闻：")
-            st.markdown(news)
+            system.news_writer.generate_news(st.session_state.news_alert_details[st.session_state.news_selected_alert],
+                                             defense_guide, use_custom_template)
 
 
 def main():
@@ -452,9 +439,7 @@ def main():
             if alerts:
                 st.success(f"\n共获取到 {len(alerts)} 条预警信息")
                 st.info("\n正在分析预警信息...")
-                analysis = system.news_writer.analyze_alerts(alerts)
-                st.info("\n预警信息分析结果：")
-                st.markdown(analysis)
+                system.news_writer.analyze_alerts(alerts)
             else:
                 st.info("暂无预警信息")
 
