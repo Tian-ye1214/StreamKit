@@ -458,7 +458,51 @@ def Political_censorship():
 
 def main():
     initialization()
-    st.title("论文润色与处理工具")
+    st.markdown("""
+    <h1 style='text-align: center;'>
+        学术炼金术 -- AI论文润色
+    </h1>
+    <div style='text-align: center; margin-bottom: 20px;'>
+    </div>
+    """, unsafe_allow_html=True)
+
+    with st.expander("📖 使用说明", expanded=False):
+        st.markdown("""
+        🌟 **AI论文润色助手使用指南** 🌟
+        
+        🧩 **功能亮点**：
+        ✅ 支持TEX和Word文档格式<br>
+        ✅ 智能语法检查和拼写纠错<br>
+        ✅ AI辅助文段润色优化<br>
+        ✅ 政治敏感内容审查<br>
+        ✅ 多模型选择支持<br>
+
+        📝 **操作流程**：
+        1. 在左侧边栏上传论文文件（支持.tex/.doc/.docx格式）
+        2. 选择适合的AI模型
+        3. 使用以下功能：
+           - 文段语法检查：快速检查文本语法和拼写
+           - TEX文段润色：对论文进行智能润色
+           - 政治审查：检查内容合规性
+
+        🔍 **润色功能说明**：
+        - 系统会自动将文档分割成段落
+        - 点击"润色该段落"按钮进行单段润色
+        - 可以自定义润色要求（Prompt）
+        - 润色结果可以预览、应用或取消
+        - 已润色段落会以绿色背景标记
+
+        ⚠️ **注意事项**：
+        - 润色过程会保持原文核心含义不变
+        - 不会修改引用、段落标记和格式内容
+        - 建议逐段润色并仔细检查结果
+        - 可以随时撤销修改或清除所有记录
+
+        💡 **小技巧**：
+        - 使用"清除所有记录"按钮重置所有状态
+        - 润色前可以调整AI模型以获得不同效果
+        - 润色完成后可以下载处理后的文件
+        """, unsafe_allow_html=True)
 
     with st.sidebar:
         def on_file_change():
