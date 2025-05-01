@@ -31,7 +31,7 @@ def extract_text_from_pdf(file):
 
         if not content.strip():
             raise ValueError("无法从PDF中提取文本内容")
-        return content.replace(" ", "")
+        return content
     except Exception as e:
         print(f"PDF处理错误：{str(e)}")
         return None
@@ -43,7 +43,7 @@ def extract_text_from_excel(file):
     for column in df.columns:
         content += f"{column}:\n"
         content += df[column].to_string() + "\n\n"
-    return content.replace(" ", "")
+    return content
 
 
 def extract_text_from_docx(docx_file):
@@ -52,7 +52,7 @@ def extract_text_from_docx(docx_file):
     text = ""
     for paragraph in doc.paragraphs:
         text += paragraph.text + "\n"
-    return text.replace(" ", "")
+    return text
 
 
 def extract_text_from_txt(file):
