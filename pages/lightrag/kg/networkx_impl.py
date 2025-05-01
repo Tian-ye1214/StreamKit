@@ -1,18 +1,11 @@
 import os
 from dataclasses import dataclass
-from typing import Any, final
-
-import numpy as np
-
+from typing import final
 
 from pages.lightrag.types import KnowledgeGraph, KnowledgeGraphNode, KnowledgeGraphEdge
-from pages.lightrag.utils import (
-    logger,
-)
+from pages.lightrag.utils import logger
+from pages.lightrag.base import BaseGraphStorage
 
-from pages.lightrag.base import (
-    BaseGraphStorage,
-)
 import pipmaster as pm
 
 if not pm.is_installed("networkx"):
@@ -22,7 +15,20 @@ if not pm.is_installed("graspologic"):
     pm.install("graspologic")
 
 import networkx as nx
-from graspologic import embed
+from .shared_storage import (
+    get_storage_lock,
+    get_update_flag,
+    set_all_update_flags,
+)
+
+from dotenv import load_dotenv
+
+# use the .env that is inside the current folder
+# allows to use different .env file for each lightrag instance
+# the OS environment variables take precedence over the .env file
+load_dotenv(dotenv_path=".env", override=False)
+
+MAX_GRAPH_NODES = int(os.getenv("MAX_GRAPH_NODES", 1000))
 
 
 @final
@@ -41,132 +47,148 @@ class NetworkXStorage(BaseGraphStorage):
         )
         nx.write_graphml(graph, file_name)
 
-    @staticmethod
-    def _stabilize_graph(graph: nx.Graph) -> nx.Graph:
-        """Refer to https://github.com/microsoft/graphrag/index/graph/utils/stable_lcc.py
-        Ensure an undirected graph with the same relationships will always be read the same way.
-        """
-        fixed_graph = nx.DiGraph() if graph.is_directed() else nx.Graph()
-
-        sorted_nodes = graph.nodes(data=True)
-        sorted_nodes = sorted(sorted_nodes, key=lambda x: x[0])
-
-        fixed_graph.add_nodes_from(sorted_nodes)
-        edges = list(graph.edges(data=True))
-
-        if not graph.is_directed():
-
-            def _sort_source_target(edge):
-                source, target, edge_data = edge
-                if source > target:
-                    temp = source
-                    source = target
-                    target = temp
-                return source, target, edge_data
-
-            edges = [_sort_source_target(edge) for edge in edges]
-
-        def _get_edge_key(source: Any, target: Any) -> str:
-            return f"{source} -> {target}"
-
-        edges = sorted(edges, key=lambda x: _get_edge_key(x[0], x[1]))
-
-        fixed_graph.add_edges_from(edges)
-        return fixed_graph
-
     def __post_init__(self):
         self._graphml_xml_file = os.path.join(
             self.global_config["working_dir"], f"graph_{self.namespace}.graphml"
         )
+        self._storage_lock = None
+        self.storage_updated = None
+        self._graph = None
+
+        # Load initial graph
         preloaded_graph = NetworkXStorage.load_nx_graph(self._graphml_xml_file)
         if preloaded_graph is not None:
             logger.info(
                 f"Loaded graph from {self._graphml_xml_file} with {preloaded_graph.number_of_nodes()} nodes, {preloaded_graph.number_of_edges()} edges"
             )
+        else:
+            logger.info("Created new empty graph")
         self._graph = preloaded_graph or nx.Graph()
-        self._node_embed_algorithms = {
-            "node2vec": self._node2vec_embed,
-        }
 
-    async def index_done_callback(self) -> None:
-        NetworkXStorage.write_nx_graph(self._graph, self._graphml_xml_file)
+    async def initialize(self):
+        """Initialize storage data"""
+        # Get the update flag for cross-process update notification
+        self.storage_updated = await get_update_flag(self.namespace)
+        # Get the storage lock for use in other methods
+        self._storage_lock = get_storage_lock()
+
+    async def _get_graph(self):
+        """Check if the storage should be reloaded"""
+        # Acquire lock to prevent concurrent read and write
+        async with self._storage_lock:
+            # Check if data needs to be reloaded
+            if self.storage_updated.value:
+                logger.info(
+                    f"Process {os.getpid()} reloading graph {self.namespace} due to update by another process"
+                )
+                # Reload data
+                self._graph = (
+                    NetworkXStorage.load_nx_graph(self._graphml_xml_file) or nx.Graph()
+                )
+                # Reset update flag
+                self.storage_updated.value = False
+
+            return self._graph
 
     async def has_node(self, node_id: str) -> bool:
-        return self._graph.has_node(node_id)
+        graph = await self._get_graph()
+        return graph.has_node(node_id)
 
     async def has_edge(self, source_node_id: str, target_node_id: str) -> bool:
-        return self._graph.has_edge(source_node_id, target_node_id)
+        graph = await self._get_graph()
+        return graph.has_edge(source_node_id, target_node_id)
 
     async def get_node(self, node_id: str) -> dict[str, str] | None:
-        return self._graph.nodes.get(node_id)
+        graph = await self._get_graph()
+        return graph.nodes.get(node_id)
 
     async def node_degree(self, node_id: str) -> int:
-        return self._graph.degree(node_id)
+        graph = await self._get_graph()
+        return graph.degree(node_id)
 
     async def edge_degree(self, src_id: str, tgt_id: str) -> int:
-        return self._graph.degree(src_id) + self._graph.degree(tgt_id)
+        graph = await self._get_graph()
+        return graph.degree(src_id) + graph.degree(tgt_id)
 
     async def get_edge(
         self, source_node_id: str, target_node_id: str
     ) -> dict[str, str] | None:
-        return self._graph.edges.get((source_node_id, target_node_id))
+        graph = await self._get_graph()
+        return graph.edges.get((source_node_id, target_node_id))
 
     async def get_node_edges(self, source_node_id: str) -> list[tuple[str, str]] | None:
-        if self._graph.has_node(source_node_id):
-            return list(self._graph.edges(source_node_id))
+        graph = await self._get_graph()
+        if graph.has_node(source_node_id):
+            return list(graph.edges(source_node_id))
         return None
 
     async def upsert_node(self, node_id: str, node_data: dict[str, str]) -> None:
-        self._graph.add_node(node_id, **node_data)
+        """
+        Importance notes:
+        1. Changes will be persisted to disk during the next index_done_callback
+        2. Only one process should updating the storage at a time before index_done_callback,
+           KG-storage-log should be used to avoid data corruption
+        """
+        graph = await self._get_graph()
+        graph.add_node(node_id, **node_data)
 
     async def upsert_edge(
         self, source_node_id: str, target_node_id: str, edge_data: dict[str, str]
     ) -> None:
-        self._graph.add_edge(source_node_id, target_node_id, **edge_data)
+        """
+        Importance notes:
+        1. Changes will be persisted to disk during the next index_done_callback
+        2. Only one process should updating the storage at a time before index_done_callback,
+           KG-storage-log should be used to avoid data corruption
+        """
+        graph = await self._get_graph()
+        graph.add_edge(source_node_id, target_node_id, **edge_data)
 
     async def delete_node(self, node_id: str) -> None:
-        if self._graph.has_node(node_id):
-            self._graph.remove_node(node_id)
-            logger.info(f"Node {node_id} deleted from the graph.")
+        """
+        Importance notes:
+        1. Changes will be persisted to disk during the next index_done_callback
+        2. Only one process should updating the storage at a time before index_done_callback,
+           KG-storage-log should be used to avoid data corruption
+        """
+        graph = await self._get_graph()
+        if graph.has_node(node_id):
+            graph.remove_node(node_id)
+            logger.debug(f"Node {node_id} deleted from the graph.")
         else:
             logger.warning(f"Node {node_id} not found in the graph for deletion.")
 
-    async def embed_nodes(
-        self, algorithm: str
-    ) -> tuple[np.ndarray[Any, Any], list[str]]:
-        if algorithm not in self._node_embed_algorithms:
-            raise ValueError(f"Node embedding algorithm {algorithm} not supported")
-        return await self._node_embed_algorithms[algorithm]()
-
-    # @TODO: NOT USED
-    async def _node2vec_embed(self):
-        embeddings, nodes = embed.node2vec_embed(
-            self._graph,
-            **self.global_config["node2vec_params"],
-        )
-
-        nodes_ids = [self._graph.nodes[node_id]["id"] for node_id in nodes]
-        return embeddings, nodes_ids
-
-    def remove_nodes(self, nodes: list[str]):
+    async def remove_nodes(self, nodes: list[str]):
         """Delete multiple nodes
+
+        Importance notes:
+        1. Changes will be persisted to disk during the next index_done_callback
+        2. Only one process should updating the storage at a time before index_done_callback,
+           KG-storage-log should be used to avoid data corruption
 
         Args:
             nodes: List of node IDs to be deleted
         """
+        graph = await self._get_graph()
         for node in nodes:
-            if self._graph.has_node(node):
-                self._graph.remove_node(node)
+            if graph.has_node(node):
+                graph.remove_node(node)
 
-    def remove_edges(self, edges: list[tuple[str, str]]):
+    async def remove_edges(self, edges: list[tuple[str, str]]):
         """Delete multiple edges
+
+        Importance notes:
+        1. Changes will be persisted to disk during the next index_done_callback
+        2. Only one process should updating the storage at a time before index_done_callback,
+           KG-storage-log should be used to avoid data corruption
 
         Args:
             edges: List of edges to be deleted, each edge is a (source, target) tuple
         """
+        graph = await self._get_graph()
         for source, target in edges:
-            if self._graph.has_edge(source, target):
-                self._graph.remove_edge(source, target)
+            if graph.has_edge(source, target):
+                graph.remove_edge(source, target)
 
     async def get_all_labels(self) -> list[str]:
         """
@@ -174,66 +196,115 @@ class NetworkXStorage(BaseGraphStorage):
         Returns:
             [label1, label2, ...]  # Alphabetically sorted label list
         """
+        graph = await self._get_graph()
         labels = set()
-        for node in self._graph.nodes():
+        for node in graph.nodes():
             labels.add(str(node))  # Add node id as a label
 
         # Return sorted list
         return sorted(list(labels))
 
     async def get_knowledge_graph(
-        self, node_label: str, max_depth: int = 5
+        self,
+        node_label: str,
+        max_depth: int = 3,
+        max_nodes: int = MAX_GRAPH_NODES,
     ) -> KnowledgeGraph:
         """
-        Get complete connected subgraph for specified node (including the starting node itself)
+        Retrieve a connected subgraph of nodes where the label includes the specified `node_label`.
 
         Args:
-            node_label: Label of the starting node
-            max_depth: Maximum depth of the subgraph
+            node_label: Label of the starting node，* means all nodes
+            max_depth: Maximum depth of the subgraph, Defaults to 3
+            max_nodes: Maxiumu nodes to return by BFS, Defaults to 1000
 
         Returns:
-            KnowledgeGraph object containing nodes and edges
+            KnowledgeGraph object containing nodes and edges, with an is_truncated flag
+            indicating whether the graph was truncated due to max_nodes limit
         """
+        graph = await self._get_graph()
+
         result = KnowledgeGraph()
-        seen_nodes = set()
-        seen_edges = set()
 
         # Handle special case for "*" label
         if node_label == "*":
-            # For "*", return the entire graph including all nodes and edges
-            subgraph = (
-                self._graph.copy()
-            )  # Create a copy to avoid modifying the original graph
+            # Get degrees of all nodes
+            degrees = dict(graph.degree())
+            # Sort nodes by degree in descending order and take top max_nodes
+            sorted_nodes = sorted(degrees.items(), key=lambda x: x[1], reverse=True)
+
+            # Check if graph is truncated
+            if len(sorted_nodes) > max_nodes:
+                result.is_truncated = True
+                logger.info(
+                    f"Graph truncated: {len(sorted_nodes)} nodes found, limited to {max_nodes}"
+                )
+
+            limited_nodes = [node for node, _ in sorted_nodes[:max_nodes]]
+            # Create subgraph with the highest degree nodes
+            subgraph = graph.subgraph(limited_nodes)
         else:
-            # Find nodes with matching node id (partial match)
-            nodes_to_explore = []
-            for n, attr in self._graph.nodes(data=True):
-                if node_label in str(n):  # Use partial matching
-                    nodes_to_explore.append(n)
+            # Check if node exists
+            if node_label not in graph:
+                logger.warning(f"Node {node_label} not found in the graph")
+                return KnowledgeGraph()  # Return empty graph
 
-            if not nodes_to_explore:
-                logger.warning(f"No nodes found with label {node_label}")
-                return result
+            # Use modified BFS to get nodes, prioritizing high-degree nodes at the same depth
+            bfs_nodes = []
+            visited = set()
+            # Store (node, depth, degree) in the queue
+            queue = [(node_label, 0, graph.degree(node_label))]
 
-            # Get subgraph using ego_graph
-            subgraph = nx.ego_graph(self._graph, nodes_to_explore[0], radius=max_depth)
+            # Modified breadth-first search with degree-based prioritization
+            while queue and len(bfs_nodes) < max_nodes:
+                # Get the current depth from the first node in queue
+                current_depth = queue[0][1]
 
-        # Check if number of nodes exceeds max_graph_nodes
-        max_graph_nodes = 500
-        if len(subgraph.nodes()) > max_graph_nodes:
-            origin_nodes = len(subgraph.nodes())
-            node_degrees = dict(subgraph.degree())
-            top_nodes = sorted(node_degrees.items(), key=lambda x: x[1], reverse=True)[
-                :max_graph_nodes
-            ]
-            top_node_ids = [node[0] for node in top_nodes]
-            # Create new subgraph with only top nodes
-            subgraph = subgraph.subgraph(top_node_ids)
-            logger.info(
-                f"Reduced graph from {origin_nodes} nodes to {max_graph_nodes} nodes (depth={max_depth})"
-            )
+                # Collect all nodes at the current depth
+                current_level_nodes = []
+                while queue and queue[0][1] == current_depth:
+                    current_level_nodes.append(queue.pop(0))
+
+                # Sort nodes at current depth by degree (highest first)
+                current_level_nodes.sort(key=lambda x: x[2], reverse=True)
+
+                # Process all nodes at current depth in order of degree
+                for current_node, depth, degree in current_level_nodes:
+                    if current_node not in visited:
+                        visited.add(current_node)
+                        bfs_nodes.append(current_node)
+
+                        # Only explore neighbors if we haven't reached max_depth
+                        if depth < max_depth:
+                            # Add neighbor nodes to queue with incremented depth
+                            neighbors = list(graph.neighbors(current_node))
+                            # Filter out already visited neighbors
+                            unvisited_neighbors = [
+                                n for n in neighbors if n not in visited
+                            ]
+                            # Add neighbors to the queue with their degrees
+                            for neighbor in unvisited_neighbors:
+                                neighbor_degree = graph.degree(neighbor)
+                                queue.append((neighbor, depth + 1, neighbor_degree))
+
+                    # Check if we've reached max_nodes
+                    if len(bfs_nodes) >= max_nodes:
+                        break
+
+            # Check if graph is truncated - if we still have nodes in the queue
+            # and we've reached max_nodes, then the graph is truncated
+            if queue and len(bfs_nodes) >= max_nodes:
+                result.is_truncated = True
+                logger.info(
+                    f"Graph truncated: breadth-first search limited to {max_nodes} nodes"
+                )
+
+            # Create subgraph with BFS discovered nodes
+            subgraph = graph.subgraph(bfs_nodes)
 
         # Add nodes to result
+        seen_nodes = set()
+        seen_edges = set()
         for node in subgraph.nodes():
             if str(node) in seen_nodes:
                 continue
@@ -260,6 +331,9 @@ class NetworkXStorage(BaseGraphStorage):
         # Add edges to result
         for edge in subgraph.edges():
             source, target = edge
+            # Esure unique edge_id for undirect graph
+            if str(source) > str(target):
+                source, target = target, source
             edge_id = f"{source}-{target}"
             if edge_id in seen_edges:
                 continue
@@ -278,9 +352,71 @@ class NetworkXStorage(BaseGraphStorage):
             )
             seen_edges.add(edge_id)
 
-        # logger.info(result.edges)
-
         logger.info(
             f"Subgraph query successful | Node count: {len(result.nodes)} | Edge count: {len(result.edges)}"
         )
         return result
+
+    async def index_done_callback(self) -> bool:
+        """Save data to disk"""
+        async with self._storage_lock:
+            # Check if storage was updated by another process
+            if self.storage_updated.value:
+                # Storage was updated by another process, reload data instead of saving
+                logger.info(
+                    f"Graph for {self.namespace} was updated by another process, reloading..."
+                )
+                self._graph = (
+                    NetworkXStorage.load_nx_graph(self._graphml_xml_file) or nx.Graph()
+                )
+                # Reset update flag
+                self.storage_updated.value = False
+                return False  # Return error
+
+        # Acquire lock and perform persistence
+        async with self._storage_lock:
+            try:
+                # Save data to disk
+                NetworkXStorage.write_nx_graph(self._graph, self._graphml_xml_file)
+                # Notify other processes that data has been updated
+                await set_all_update_flags(self.namespace)
+                # Reset own update flag to avoid self-reloading
+                self.storage_updated.value = False
+                return True  # Return success
+            except Exception as e:
+                logger.error(f"Error saving graph for {self.namespace}: {e}")
+                return False  # Return error
+
+        return True
+
+    async def drop(self) -> dict[str, str]:
+        """Drop all graph data from storage and clean up resources
+
+        This method will:
+        1. Remove the graph storage file if it exists
+        2. Reset the graph to an empty state
+        3. Update flags to notify other processes
+        4. Changes is persisted to disk immediately
+
+        Returns:
+            dict[str, str]: Operation status and message
+            - On success: {"status": "success", "message": "data dropped"}
+            - On failure: {"status": "error", "message": "<error details>"}
+        """
+        try:
+            async with self._storage_lock:
+                # delete _client_file_name
+                if os.path.exists(self._graphml_xml_file):
+                    os.remove(self._graphml_xml_file)
+                self._graph = nx.Graph()
+                # Notify other processes that data has been updated
+                await set_all_update_flags(self.namespace)
+                # Reset own update flag to avoid self-reloading
+                self.storage_updated.value = False
+                logger.info(
+                    f"Process {os.getpid()} drop graph {self.namespace} (file:{self._graphml_xml_file})"
+                )
+            return {"status": "success", "message": "data dropped"}
+        except Exception as e:
+            logger.error(f"Error dropping graph {self.namespace}: {e}")
+            return {"status": "error", "message": str(e)}
