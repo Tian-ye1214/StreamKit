@@ -15,7 +15,10 @@ VISIONMODAL_MAPPING = {
     "GPT-4.1-mini": "gpt-4.1-mini",
     "GPT-4o-mini": "gpt-4o-mini",
     "Gemini-2.0": "gemini-2.0-flash",
-    "Claude-3.5": "claude-3-5-sonnet-20241022",
+    "ChatGPT-4o": "chatgpt-4o-latest",
+    "GPT-4.1": "gpt-4.1",
+    "O4-mini": "o4-mini",
+    "Claude3.7": "claude-3-7-sonnet-20250219",
 }
 
 HIGHSPEED_MODEL_MAPPING = {
@@ -31,6 +34,7 @@ HIGHSPEED_MODEL_MAPPING = {
     "GPT-4.1-mini": "gpt-4.1-mini",
     "Claude3.7": "claude-3-7-sonnet-20250219",
     "Gemini-2.0-Flash": "gemini-2.0-flash",
+    "Gemini-2.0-Flash-exp": "gemini-2.0-flash-exp",
 }
 
 EMBEDDING_MODEL_MAPPING = {
