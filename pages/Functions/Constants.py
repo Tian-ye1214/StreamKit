@@ -30,11 +30,12 @@ HIGHSPEED_MODEL_MAPPING = {
     "通义千问-Max": "qwen-max-latest",
     "智谱清言-4": "glm-4-plus",
     "豆包": "Doubao-pro-32k",
-    "GPT-4.1-nano": "gpt-4.1-nano",
+    "ChatGPT-4o": "chatgpt-4o-latest",
+    "Grok-3": "grok-3",
+    "GPT-4.1": "gpt-4.1",
+    "O4-mini": "o4-mini",
+    "Gemini-2.0-flash": "gemini-2.0-flash",
     "GPT-4.1-mini": "gpt-4.1-mini",
-    "Claude3.7": "claude-3-7-sonnet-20250219",
-    "Gemini-2.0-Flash": "gemini-2.0-flash",
-    "Gemini-2.0-Flash-exp": "gemini-2.0-flash-exp",
 }
 
 EMBEDDING_MODEL_MAPPING = {
