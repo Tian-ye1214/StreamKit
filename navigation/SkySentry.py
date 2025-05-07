@@ -387,7 +387,7 @@ def main():
         selected_model_name = st.selectbox(
             "选择模型",
             options=model_names,
-            index=1
+            index=0
         )
         st.session_state.selected_model = HIGHSPEED_MODEL_MAPPING[selected_model_name]
         st.markdown("联系作者")
