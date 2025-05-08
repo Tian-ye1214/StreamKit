@@ -8,9 +8,16 @@ import os
 import sys
 import io
 import cv2
+import torch
+from transformers import AutoProcessor, AutoModelForZeroShotObjectDetection
 
 
 def initialization():
+    if "dino" not in st.session_state:
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        model_path = os.path.join(base_dir, "pages/ModelCheckpoint/GroundingDINO-T")
+        st.session_state.dino_processor = AutoProcessor.from_pretrained(model_path, use_fast=True)
+        st.session_state.dino_model = AutoModelForZeroShotObjectDetection.from_pretrained(model_path).to("cuda")
     if "coordinates" not in st.session_state:
         st.session_state["coordinates"] = None
     if "clicks" not in st.session_state:
@@ -109,9 +116,10 @@ def point_inference():
                 st.session_state.input_point.append([actual_x, actual_y])
                 st.session_state.input_label.append(st.session_state.current_marker)
 
-                masks = st.session_state.SAM2.point_inference(st.session_state.current_image,
-                                                              np.array(st.session_state.input_point),
-                                                              np.array(st.session_state.input_label))
+                masks = st.session_state.SAM2.point_and_box_inference(st.session_state.current_image,
+                                                                      np.array(st.session_state.input_point),
+                                                                      np.array(st.session_state.input_label),
+                                                                      None)
                 st.session_state.latest_masks = (masks[0] * 255)
                 st.session_state.masks_image = Image.fromarray(st.session_state.latest_masks.astype(np.uint8))
                 st.session_state.combine_image = Image.fromarray(
@@ -125,31 +133,6 @@ def point_inference():
                     st.rerun()
         except KeyError as e:
             st.error(f"生成分割内容出错: {str(e)}")
-
-
-def auto_masks_generator():
-    auto_masks = None
-    try:
-        if st.session_state.current_image is not None:
-            st.markdown("### 自动掩码生成")
-            if st.session_state.combine_image is not None:
-                st.image(st.session_state.combine_image, use_container_width=True, caption="分割图像")
-            else:
-                st.image(st.session_state.current_image, use_container_width=True, caption="原始图像")
-
-            if st.button("生成全图掩码", help="自动生成全图所有物体的掩码"):
-                with st.spinner("正在生成全图掩码..."):
-                    auto_masks = st.session_state.SAM2.auto_mask_genarator(st.session_state.current_image)
-
-            if auto_masks is not None:
-                combined_mask = st.session_state.SAM2.show_masks(st.session_state.current_image, auto_masks)
-                st.session_state.masks_image = Image.fromarray(combined_mask)
-                blended = cv2.addWeighted(st.session_state.current_image, 0.8,
-                                          combined_mask[..., :3], 0.8, 0)
-                st.session_state.combine_image = Image.fromarray(blended)
-                st.rerun()
-    except KeyError as e:
-        st.error(f"生成分割内容出错: {str(e)}")
 
 
 def box_inference():
@@ -178,17 +161,20 @@ def box_inference():
             point1 = (value["x1"], value["y1"])
             point2 = (value["x2"], value["y2"])
 
-            if (point1[0] != point2[0] and point1[1] != point2[1] and 
-                st.session_state.box_coordinates != (point1, point2)):
+            if (point1[0] != point2[0] and point1[1] != point2[1] and
+                    st.session_state.box_coordinates != (point1, point2)):
                 st.session_state.box_coordinates = (point1, point2)
-                
+
                 box_coords = get_rectangle_coords(st.session_state.box_coordinates)
-                
+
                 try:
                     with st.spinner("正在生成分割结果..."):
                         st.session_state.box_input.append([box_coords[0], box_coords[1], box_coords[2], box_coords[3]])
-                        masks = st.session_state.SAM2.box_inference(st.session_state.current_image
-                                                                    , np.array(st.session_state.box_input))
+
+                        masks = st.session_state.SAM2.point_and_box_inference(st.session_state.current_image,
+                                                                              None,
+                                                                              None,
+                                                                              np.array(st.session_state.box_input))
                         if len(masks.shape) == 4:
                             masks = masks[-1]
                             set_image = np.array(st.session_state.combine_image)
@@ -209,6 +195,84 @@ def box_inference():
                         st.rerun()
                 except Exception as e:
                     st.error(f"框选分割出错: {str(e)}")
+
+
+def auto_masks_generator():
+    auto_masks = None
+    try:
+        if st.session_state.current_image is not None:
+            st.markdown("### 自动掩码生成")
+            if st.session_state.combine_image is not None:
+                st.image(st.session_state.combine_image, use_container_width=True, caption="分割图像")
+            else:
+                st.image(st.session_state.current_image, use_container_width=True, caption="原始图像")
+
+            if st.button("生成全图掩码", help="自动生成全图所有物体的掩码"):
+                with st.spinner("正在生成全图掩码..."):
+                    auto_masks = st.session_state.SAM2.auto_mask_genarator(st.session_state.current_image)
+
+            if auto_masks is not None:
+                combined_mask = st.session_state.SAM2.show_masks(st.session_state.current_image, auto_masks)
+                st.session_state.masks_image = Image.fromarray(combined_mask)
+                blended = cv2.addWeighted(st.session_state.current_image, 0.8,
+                                          combined_mask[..., :3], 0.8, 0)
+                st.session_state.combine_image = Image.fromarray(blended)
+                st.rerun()
+    except KeyError as e:
+        st.error(f"生成分割内容出错: {str(e)}")
+
+
+def inference_with_nature_language():
+    box_list = []
+    if st.session_state.current_image is not None:
+        if st.session_state.combine_image:
+            masked_image = st.session_state.combine_image
+        else:
+            masked_image = Image.fromarray(st.session_state.current_image)
+        st.image(masked_image)
+        if text_labels := st.chat_input("在这里输入想要分割的地方："):
+            if not all(ord(c) < 128 for c in text_labels):
+                st.error('目前模型只支持英文输入🥲')
+                return
+            text_labels = 'a ' + text_labels + '.'
+            text_labels =  text_labels.lower()
+            inputs = st.session_state.dino_processor(images=masked_image, text=text_labels, return_tensors="pt").to("cuda")
+            with st.spinner('开始检测'):
+                with torch.no_grad():
+                    outputs = st.session_state.dino_model(**inputs)
+
+                results = st.session_state.dino_processor.post_process_grounded_object_detection(
+                    outputs,
+                    inputs.input_ids,
+                    box_threshold=0.4,
+                    text_threshold=0.3,
+                    target_sizes=[masked_image.size[::-1]]
+                )
+                result = results[0]
+                for box in result["boxes"]:
+                    box = [round(x, 2) for x in box.tolist()]
+                    box_list.append(box)
+                if not box_list:
+                    st.error('检测失败')
+                    return
+                else:
+                    st.info(f'检测到目标位置：{box_list}')
+            with st.spinner('开始分割'):
+                masks = st.session_state.SAM2.point_and_box_inference(masked_image, input_box=np.array(box_list))
+                all_masks = np.zeros(masked_image.size[::-1], dtype=np.float32)
+                if len(masks.shape) == 4:
+                    for mask in masks:
+                        all_masks += mask[0].astype(np.float32)
+                else:
+                    all_masks = masks[0].astype(np.float32)
+                all_masks[all_masks != 0] = 1
+                all_masks = (all_masks * 255).astype(np.uint8)
+                st.session_state.masks_image = Image.fromarray(all_masks)
+                st.session_state.latest_masks = all_masks
+                st.session_state.combine_image = Image.fromarray(
+                    st.session_state.SAM2.show_mask(st.session_state.latest_masks, image=np.array(masked_image))
+                )
+                st.rerun()
 
 
 def clear_all():
@@ -254,7 +318,7 @@ def main():
         </div>
         """, unsafe_allow_html=True)
 
-    uploaded_file = st.file_uploader("选择图片", type=["jpg", "png", "jpeg"], label_visibility="collapsed")
+    uploaded_file = st.file_uploader("选择图片", type=["jpg", "png", "jpeg"])
     if uploaded_file is not None:
         file_bytes = uploaded_file.getvalue()
 
@@ -264,8 +328,11 @@ def main():
             st.session_state.previous_file_hash = current_file_hash
 
         st.session_state.current_image = resize_image_if_needed(Image.open(uploaded_file).convert("RGB"))
+    else:
+        st.warning('请上传图片')
+        return
 
-    tab1, tab2, tab3 = st.tabs(['Point inference', 'Box inference', 'Auto Masks Generation'])
+    tab1, tab2, tab3, tab4 = st.tabs(['Point inference', 'Box inference', 'Auto Masks Generation', 'Inference with natural language'])
     with tab1:
         point_inference()
 
@@ -274,6 +341,9 @@ def main():
 
     with tab3:
         auto_masks_generator()
+
+    with tab4:
+        inference_with_nature_language()
 
     with st.sidebar:
         marker_type = st.radio(
@@ -339,6 +409,6 @@ if 'previous_page' not in st.session_state:
     st.session_state.previous_page = 'SAM2'
 current_page = 'SAM2'
 if current_page != st.session_state.previous_page:
-        st.session_state.clear()
-        st.session_state.previous_page = current_page
+    st.session_state.clear()
+    st.session_state.previous_page = current_page
 main()
