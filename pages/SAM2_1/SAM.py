@@ -84,22 +84,11 @@ class SAM2Segment:
             cv2.drawContours(overlay, contours, -1, (0, 0, 1.0, 0.4), 1)
         return (overlay * 255).astype(np.uint8)
 
-    def point_inference(self, image, input_point=None, input_label=None):
+    def point_and_box_inference(self, image, input_point=None, input_label=None, input_box=None):
         self.predictor.set_image(image)
         masks, scores, _ = self.predictor.predict(
             point_coords=input_point,
             point_labels=input_label,
-            multimask_output=False,
-        )
-        sorted_ind = np.argsort(scores)[::-1]
-        masks = masks[sorted_ind]
-        return masks
-
-    def box_inference(self, image, input_box=None):
-        self.predictor.set_image(image)
-        masks, scores, _ = self.predictor.predict(
-            point_coords=None,
-            point_labels=None,
             box=input_box,
             multimask_output=False,
         )
