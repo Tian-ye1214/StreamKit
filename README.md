@@ -42,6 +42,8 @@ pip install -r requirements.txt
   - 下载地址：https://huggingface.co/wybxc/DocLayout-YOLO-DocStructBench-onnx/tree/main
 - SAM2.1模型：下载并放入`pages/SAM2_1/checkpoints`目录
   - 下载地址：https://github.com/facebookresearch/sam2
+- GroundingDINO模型：下载并放入`pages/ModelCheckpoint/GroundingDINO-T`目录
+  - 下载地址：https://huggingface.co/IDEA-Research/grounding-dino-tiny/tree/main
 
 4. 启动应用：
 ```bash
