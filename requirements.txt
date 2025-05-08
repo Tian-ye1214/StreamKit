@@ -7,6 +7,10 @@ duckduckgo_search
 streamlit_image_coordinates
 pdf2zh
 diffusers
+transformers
+opencv-python
+torch >= 2.5.1
+torchvision >= 0.20.1
 
 language_tool_python
 requests
