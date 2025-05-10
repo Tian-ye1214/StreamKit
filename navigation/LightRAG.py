@@ -259,7 +259,7 @@ async def _process_uploaded_file(uploaded_file):
             st.session_state.messages = []
 
         if not st.session_state.has_document:
-            content = extract_text(uploaded_file)
+            content = await extract_text(uploaded_file)
             if content:
                 try:
                     await st.session_state.rag.ainsert(content)
