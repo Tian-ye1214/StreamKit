@@ -22,6 +22,8 @@ class RAG:
         self.rerank_model_path = rerank_model_path
         self.DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
+        self.all_results = []
+
     # 1. 定义 embedding 函数
     async def hf_embed(self, texts: list[str], tokenizer, embed_model) -> np.ndarray:
         encoded_texts = tokenizer(
@@ -117,40 +119,39 @@ class RAG:
 
         return results[:top_k]
 
+    async def retrieval_from_kb(self, kb, query_embedding, all_results):
+        data = await kb_manager.get_knowledge_base(st.session_state.current_user, kb['file_id'])
+
+        # 计算相似度
+        embeddings = np.array([item["embedding"] for item in data])
+        similarities = cosine_similarity([query_embedding], embeddings)[0]
+
+        # 将结果添加到列表
+        for i, similarity in enumerate(similarities):
+            all_results.append({
+                "text": data[i]["text"],
+                "similarity": similarity,
+                "source": f"knowledge_{kb['file_id']}.json"
+            })
+
     async def retrieval(self, user_input, tokenizer, embed_model, knowledge_bases):
         embeddings = await self.hf_embed([user_input], tokenizer, embed_model)
         query_embedding = embeddings[0]
 
-        # 存储所有相似度结果
-        all_results = []
-
-        # 遍历所有知识库文件
-        for kb in knowledge_bases:
-            data = await kb_manager.get_knowledge_base(st.session_state.current_user, kb['file_id'])
-
-            # 计算相似度
-            embeddings = np.array([item["embedding"] for item in data])
-            similarities = cosine_similarity([query_embedding], embeddings)[0]
-
-            # 将结果添加到列表
-            for i, similarity in enumerate(similarities):
-                all_results.append({
-                    "text": data[i]["text"],
-                    "similarity": similarity,
-                    "source": f"knowledge_{kb['file_id']}.json"
-                })
+        tasks = [self.retrieval_from_kb(kb, query_embedding, self.all_results) for kb in knowledge_bases]
+        await asyncio.gather(*tasks)
 
         # 按相似度排序并获取top-k
-        all_results.sort(key=lambda x: x["similarity"], reverse=True)
-        top_results = all_results[:st.session_state.top_k]
+        self.all_results.sort(key=lambda x: x["similarity"], reverse=True)
+        top_results = self.all_results[:st.session_state.top_k]
 
         if st.session_state.use_rerank:
             with st.spinner("正在使用Rerank模型重排序..."):
                 rerank_tokenizer, rerank_model = await self.load_rerank_model()
-                candidate_results = all_results[:min(st.session_state.top_k * 4, len(all_results))]
+                candidate_results = self.all_results[:min(st.session_state.top_k * 4, len(self.all_results))]
                 top_results = await self.rerank_results(user_input, candidate_results, rerank_tokenizer,
-                                                  rerank_model,
-                                                  st.session_state.top_k)
+                                                        rerank_model,
+                                                        st.session_state.top_k)
         return top_results
 
 
@@ -192,8 +193,9 @@ async def RAG_base(rag_system):
                 st.warning("请先上传文档构建知识库！")
 
             if user_input := st.chat_input("在这里输入您的问题：", key="rag_base_input"):
-                top_results = await rag_system.retrieval(user_input, st.session_state.tokenizer, st.session_state.embed_model,
-                                                   knowledge_bases)
+                top_results = await rag_system.retrieval(user_input, st.session_state.tokenizer,
+                                                         st.session_state.embed_model,
+                                                         knowledge_bases)
 
                 st.subheader(f"最相似的 {st.session_state.top_k} 个段落：")
                 for i, result in enumerate(top_results, 1):
@@ -210,34 +212,35 @@ async def RAG_base(rag_system):
             uploaded_files = st.file_uploader("上传文档(支持多个文件上传)", type=["pdf", "docx", "txt", "csv"],
                                               accept_multiple_files=True)
             if uploaded_files:
-                for uploaded_file in uploaded_files:
-                    st.write(f"正在处理文件: {uploaded_file.name}")
-                    file_id = await rag_system.file_hash(uploaded_file.read())
+                tasks = [processing_file(rag_system, file) for file in uploaded_files]
+                await asyncio.gather(*tasks)
 
-                    existing_kb = await kb_manager.get_knowledge_base(st.session_state.current_user, file_id)
-                    if existing_kb:
-                        st.success(f"文件 {uploaded_file.name} 已存在知识库，无需重复构建。")
-                        st.write(f"共 {len(existing_kb)} 段，已加载。")
-                        continue
-                    else:
-                        text = await extract_text(uploaded_file)
-                        chunks = await rag_system.split_text(text, chunk_size=st.session_state.chunk_size,
-                                                             special_chars=st.session_state.special_chars,
-                                                             overlap=st.session_state.overlap)
-                        st.write(f"文档 {uploaded_file.name} 被切割为 {len(chunks)} 段。")
 
-                        with st.spinner(f"正在为 {uploaded_file.name} 生成 embedding..."):
-                            embeddings = []
-                            batch_size = 8
-                            for i in range(0, len(chunks), batch_size):
-                                batch = chunks[i:i + batch_size]
-                                emb = await rag_system.hf_embed(batch, st.session_state.tokenizer,
-                                                                st.session_state.embed_model)
-                                embeddings.extend(emb.tolist())
+async def processing_file(rag_system, uploaded_file):
+    st.write(f"正在处理文件: {uploaded_file.name}")
+    file_id = await rag_system.file_hash(uploaded_file.read())
 
-                        data = [{"text": chunk, "embedding": emb} for chunk, emb in zip(chunks, embeddings)]
-                        await kb_manager.save_knowledge_base(st.session_state.current_user, file_id, data)
-                        st.success(f"文件 {uploaded_file.name} 的知识库已构建，共 {len(data)} 段。")
+    existing_kb = await kb_manager.get_knowledge_base(st.session_state.current_user, file_id)
+    if not existing_kb:
+        text = await extract_text(uploaded_file)
+        chunks = await rag_system.split_text(text, chunk_size=st.session_state.chunk_size,
+                                             special_chars=st.session_state.special_chars,
+                                             overlap=st.session_state.overlap)
+        st.write(f"文档 {uploaded_file.name} 被切割为 {len(chunks)} 段。")
+
+        with st.spinner(f"正在为 {uploaded_file.name} 生成 embedding..."):
+            embeddings = []
+            batch_size = 8
+            batch = [chunks[i:i + batch_size] for i in range(0, len(chunks), batch_size)]
+            task = [rag_system.hf_embed(text, st.session_state.tokenizer, st.session_state.embed_model) for text in
+                    batch]
+            result = await asyncio.gather(*task)
+            for emb in result:
+                embeddings.extend(emb.tolist())
+
+        data = [{"text": chunk, "embedding": emb} for chunk, emb in zip(chunks, embeddings)]
+        await kb_manager.save_knowledge_base(st.session_state.current_user, file_id, data)
+        st.success(f"文件 {uploaded_file.name} 的知识库已构建，共 {len(data)} 段。")
 
 
 async def rag_with_ai(rag_system):
@@ -254,7 +257,7 @@ async def rag_with_ai(rag_system):
 
     if user_input := st.chat_input("在这里输入您的问题：", key="rag_ai_input"):
         top_results = await rag_system.retrieval(user_input, st.session_state.tokenizer, st.session_state.embed_model,
-                                           knowledge_bases)
+                                                 knowledge_bases)
 
         context = "\n\n".join([f"参考内容 {i + 1}:\n{result['text']}" for i, result in enumerate(top_results)])
         message = rag_prompt(user_input, context)
@@ -346,7 +349,7 @@ async def knowledge_base_management():
                     with col_1:
                         if st.button(f"下载", key=f"download_{kb['file_id']}"):
                             zip_buffer = await kb_manager.download_knowledge_base(st.session_state.current_user,
-                                                                            kb['file_id'])
+                                                                                  kb['file_id'])
                             if zip_buffer:
                                 st.download_button(
                                     label=f"点击下载",
@@ -455,7 +458,7 @@ async def main():
         st.session_state.chunk_size = st.number_input("文本块大小", min_value=64, max_value=8192, value=1024, step=64)
         st.session_state.overlap = st.number_input("重叠字符数", min_value=0,
                                                    max_value=st.session_state.chunk_size // 2, value=128, step=64)
-        st.session_state.special_chars = st.text_input("特殊分隔符（用逗号分隔）", value="")
+        st.session_state.special_chars = st.text_input("特殊分隔符（用英文逗号分隔）", value="")
         st.session_state.special_chars = [char.strip() for char in st.session_state.special_chars.split(
             ",")] if st.session_state.special_chars else None
         st.session_state.top_k = st.number_input("返回最相似的段落数", min_value=1, max_value=20, value=5, step=1)
