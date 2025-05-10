@@ -6,6 +6,7 @@ from pages.Functions.Constants import (
     REASON_MODELS,
     VISIONMODAL_MAPPING
 )
+import asyncio
 
 st.set_page_config(
     page_title="Chat With AI",
@@ -15,9 +16,9 @@ st.set_page_config(
 )
 
 
-def main():
+async def main():
     backend = BackendInteractionLogic()
-    backend.initialize_session_state()
+    await backend.initialize_session_state()
     st.markdown("""
     <h1 style='text-align: center;'>
         Chat With AI
@@ -49,16 +50,16 @@ def main():
         """, unsafe_allow_html=True)
 
     with st.sidebar:
-        backend.user_interaction()
-        backend.start_new_conversation()
+        await backend.user_interaction()
+        await backend.start_new_conversation()
 
         st.markdown("""
         <h3 style='text-align: center;'>
             模型配置
         </h3>
         """, unsafe_allow_html=True)
-        sections = st.radio("",
-                            ["文本对话", "视觉对话"],
+        sections = st.radio("对话模式",
+                            ["文本对话", "视觉对话"], 
                             index=0,
                             )
         if sections == '文本对话':
@@ -71,7 +72,7 @@ def main():
         if st.session_state.model not in REASON_MODELS:
             st.session_state.system_prompt = "You are a helpful assistant."
 
-        backend.parameter_configuration()
+        await backend.parameter_configuration()
         st.markdown("联系作者")
         st.markdown(f"""
         📧 [Z1092228927@outlook.com](mailto:Z1092228927@outlook.com)<br>
@@ -79,19 +80,19 @@ def main():
         """, unsafe_allow_html=True)
 
     if sections == '视觉对话':
-        backend.image_upload()
+        await backend.image_upload()
 
     for message in st.session_state.chat_messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
     if prompt := st.chat_input("在这里输入您的问题："):
-        backend.user_input(prompt)
-        backend.search_interaction()
+        await backend.user_input(prompt)
+        await backend.search_interaction()
 
         with st.chat_message("assistant"):
             try:
-                backend.ai_generation(sections)
+                await backend.ai_generation(sections)
             except Exception as e:
                 st.error(f"生成回答时出错: {str(e)}")
 
@@ -102,4 +103,5 @@ current_page = 'chat'
 if current_page != st.session_state.previous_page:
     st.session_state.clear()
     st.session_state.previous_page = current_page
-main()
+
+asyncio.run(main())
