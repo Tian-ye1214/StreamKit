@@ -11,6 +11,7 @@ from openai import OpenAI
 from pages.Functions.Constants import HIGHSPEED_MODEL_MAPPING
 import os
 import re
+import asyncio
 
 kb_manager = KnowledgeBaseManager()
 
@@ -22,7 +23,7 @@ class RAG:
         self.DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
     # 1. 定义 embedding 函数
-    def hf_embed(self, texts: list[str], tokenizer, embed_model) -> np.ndarray:
+    async def hf_embed(self, texts: list[str], tokenizer, embed_model) -> np.ndarray:
         encoded_texts = tokenizer(
             texts, return_tensors="pt", padding=True, truncation=True
         ).to(self.DEVICE)
@@ -38,7 +39,7 @@ class RAG:
             return embeddings.detach().cpu().numpy()
 
     # 2. 文本切割函数
-    def split_text(self, text, chunk_size=1024, special_chars=None, overlap=128):
+    async def split_text(self, text, chunk_size=1024, special_chars=None, overlap=128):
         # 先按特殊字符分割
         if special_chars:
             segments = []
@@ -77,11 +78,11 @@ class RAG:
             return chunks
 
     # 3. 计算文件 hash
-    def file_hash(self, file_bytes):
+    async def file_hash(self, file_bytes):
         return hashlib.md5(file_bytes).hexdigest()
 
     # 4. 加载模型函数
-    def load_model(self):
+    async def load_model(self):
         tokenizer = AutoTokenizer.from_pretrained(self.embedding_model_path)
         embed_model = AutoModel.from_pretrained(self.embedding_model_path, torch_dtype=torch.bfloat16)
         embed_model.eval()
@@ -89,7 +90,7 @@ class RAG:
         return tokenizer, embed_model
 
     # 5. 加载rerank模型函数
-    def load_rerank_model(self):
+    async def load_rerank_model(self):
         tokenizer = AutoTokenizer.from_pretrained(self.rerank_model_path)
         model = AutoModelForSequenceClassification.from_pretrained(self.rerank_model_path, torch_dtype=torch.bfloat16)
         model.eval()
@@ -97,7 +98,7 @@ class RAG:
         return tokenizer, model
 
     # 6. 使用rerank模型重排序
-    def rerank_results(self, query, results, tokenizer, model, top_k):
+    async def rerank_results(self, query, results, tokenizer, model, top_k):
         if not results:
             return []
 
@@ -105,7 +106,8 @@ class RAG:
 
         # 使用模型计算分数
         with torch.no_grad():
-            inputs = tokenizer(pairs, padding=True, truncation=True, return_tensors='pt', max_length=512).to(self.DEVICE)
+            inputs = tokenizer(pairs, padding=True, truncation=True, return_tensors='pt', max_length=512).to(
+                self.DEVICE)
             logits = model(**inputs, return_dict=True).logits.view(-1, ).float()
             scores = torch.softmax(logits, dim=0).cpu().numpy()
 
@@ -115,15 +117,16 @@ class RAG:
 
         return results[:top_k]
 
-    def retrieval(self, user_input, tokenizer, embed_model, knowledge_bases):
-        query_embedding = self.hf_embed([user_input], tokenizer, embed_model)[0]
+    async def retrieval(self, user_input, tokenizer, embed_model, knowledge_bases):
+        embeddings = await self.hf_embed([user_input], tokenizer, embed_model)
+        query_embedding = embeddings[0]
 
         # 存储所有相似度结果
         all_results = []
 
         # 遍历所有知识库文件
         for kb in knowledge_bases:
-            data = kb_manager.get_knowledge_base(st.session_state.current_user, kb['file_id'])
+            data = await kb_manager.get_knowledge_base(st.session_state.current_user, kb['file_id'])
 
             # 计算相似度
             embeddings = np.array([item["embedding"] for item in data])
@@ -143,15 +146,15 @@ class RAG:
 
         if st.session_state.use_rerank:
             with st.spinner("正在使用Rerank模型重排序..."):
-                rerank_tokenizer, rerank_model = self.load_rerank_model()
+                rerank_tokenizer, rerank_model = await self.load_rerank_model()
                 candidate_results = all_results[:min(st.session_state.top_k * 4, len(all_results))]
-                top_results = self.rerank_results(user_input, candidate_results, rerank_tokenizer,
-                                                        rerank_model,
-                                                        st.session_state.top_k)
+                top_results = await self.rerank_results(user_input, candidate_results, rerank_tokenizer,
+                                                  rerank_model,
+                                                  st.session_state.top_k)
         return top_results
 
 
-def initialization(rag_system):
+async def initialization(rag_system):
     if "chunk_size" not in st.session_state:
         st.session_state.chunk_size = 1024
     if "overlap" not in st.session_state:
@@ -171,10 +174,10 @@ def initialization(rag_system):
     if 'selected_model' not in st.session_state:
         st.session_state.selected_model = "deepseek-chat"
     if 'embed_model' not in st.session_state:
-        st.session_state.tokenizer, st.session_state.embed_model = rag_system.load_model()
+        st.session_state.tokenizer, st.session_state.embed_model = await rag_system.load_model()
 
 
-def RAG_base(rag_system):
+async def RAG_base(rag_system):
     col1, col2 = st.columns(2)
 
     if not st.session_state.current_user:
@@ -183,13 +186,14 @@ def RAG_base(rag_system):
     with col1:
         st.header("文段检索")
         if st.session_state.current_user:
-            knowledge_bases = kb_manager.list_knowledge_bases(st.session_state.current_user)
+            knowledge_bases = await kb_manager.list_knowledge_bases(st.session_state.current_user)
 
             if not knowledge_bases:
                 st.warning("请先上传文档构建知识库！")
 
             if user_input := st.chat_input("在这里输入您的问题：", key="rag_base_input"):
-                top_results = rag_system.retrieval(user_input, st.session_state.tokenizer, st.session_state.embed_model, knowledge_bases)
+                top_results = await rag_system.retrieval(user_input, st.session_state.tokenizer, st.session_state.embed_model,
+                                                   knowledge_bases)
 
                 st.subheader(f"最相似的 {st.session_state.top_k} 个段落：")
                 for i, result in enumerate(top_results, 1):
@@ -203,22 +207,23 @@ def RAG_base(rag_system):
     with col2:
         st.header("知识库构建")
         if st.session_state.current_user:
-            uploaded_files = st.file_uploader("上传文档(支持多个文件上传)", type=["pdf", "docx", "txt", "csv"], accept_multiple_files=True)
+            uploaded_files = st.file_uploader("上传文档(支持多个文件上传)", type=["pdf", "docx", "txt", "csv"],
+                                              accept_multiple_files=True)
             if uploaded_files:
                 for uploaded_file in uploaded_files:
                     st.write(f"正在处理文件: {uploaded_file.name}")
-                    file_id = rag_system.file_hash(uploaded_file.read())
+                    file_id = await rag_system.file_hash(uploaded_file.read())
 
-                    existing_kb = kb_manager.get_knowledge_base(st.session_state.current_user, file_id)
+                    existing_kb = await kb_manager.get_knowledge_base(st.session_state.current_user, file_id)
                     if existing_kb:
                         st.success(f"文件 {uploaded_file.name} 已存在知识库，无需重复构建。")
                         st.write(f"共 {len(existing_kb)} 段，已加载。")
                         continue
                     else:
                         text = extract_text(uploaded_file)
-                        chunks = rag_system.split_text(text, chunk_size=st.session_state.chunk_size,
-                                                       special_chars=st.session_state.special_chars,
-                                                       overlap=st.session_state.overlap)
+                        chunks = await rag_system.split_text(text, chunk_size=st.session_state.chunk_size,
+                                                             special_chars=st.session_state.special_chars,
+                                                             overlap=st.session_state.overlap)
                         st.write(f"文档 {uploaded_file.name} 被切割为 {len(chunks)} 段。")
 
                         with st.spinner(f"正在为 {uploaded_file.name} 生成 embedding..."):
@@ -226,28 +231,30 @@ def RAG_base(rag_system):
                             batch_size = 8
                             for i in range(0, len(chunks), batch_size):
                                 batch = chunks[i:i + batch_size]
-                                emb = rag_system.hf_embed(batch, st.session_state.tokenizer, st.session_state.embed_model)
+                                emb = await rag_system.hf_embed(batch, st.session_state.tokenizer,
+                                                                st.session_state.embed_model)
                                 embeddings.extend(emb.tolist())
 
                         data = [{"text": chunk, "embedding": emb} for chunk, emb in zip(chunks, embeddings)]
-                        kb_manager.save_knowledge_base(st.session_state.current_user, file_id, data)
+                        await kb_manager.save_knowledge_base(st.session_state.current_user, file_id, data)
                         st.success(f"文件 {uploaded_file.name} 的知识库已构建，共 {len(data)} 段。")
 
 
-def rag_with_ai(rag_system):
+async def rag_with_ai(rag_system):
     if not st.session_state.current_user:
         st.info("请先登录")
         return
 
     st.header("基于知识库的智能问答")
-    knowledge_bases = kb_manager.list_knowledge_bases(st.session_state.current_user)
+    knowledge_bases = await kb_manager.list_knowledge_bases(st.session_state.current_user)
 
     if not knowledge_bases:
         st.warning("请先上传文档构建知识库！")
         return
 
     if user_input := st.chat_input("在这里输入您的问题：", key="rag_ai_input"):
-        top_results = rag_system.retrieval(user_input, st.session_state.tokenizer, st.session_state.embed_model, knowledge_bases)
+        top_results = await rag_system.retrieval(user_input, st.session_state.tokenizer, st.session_state.embed_model,
+                                           knowledge_bases)
 
         context = "\n\n".join([f"参考内容 {i + 1}:\n{result['text']}" for i, result in enumerate(top_results)])
         message = rag_prompt(user_input, context)
@@ -296,21 +303,21 @@ def rag_with_ai(rag_system):
                 st.error(f"生成回答时出错: {str(e)}")
 
 
-def knowledge_base_management():
+async def knowledge_base_management():
     st.subheader("我的知识库")
     if st.session_state.current_user is None:
         st.info("请先登录")
     else:
-        knowledge_bases = kb_manager.list_knowledge_bases(st.session_state.current_user)
+        knowledge_bases = await kb_manager.list_knowledge_bases(st.session_state.current_user)
         if not knowledge_bases:
             st.info("您还没有上传任何知识库")
         else:
             if st.button("下载所有知识库", key=f"DownloadAllKnowledgeBase"):
-                zip_buffer = kb_manager.download_all_knowledge_bases(st.session_state.current_user)
+                zip_buffer = await kb_manager.download_all_knowledge_bases(st.session_state.current_user)
                 if zip_buffer:
                     st.download_button(
                         label="点击下载所有知识库",
-                        data=zip_buffer,
+                        data=zip_buffer.getvalue(),
                         file_name=f"all_knowledge_bases_{st.session_state.current_user}.zip",
                         mime="application/zip",
                         key="download_all_btn"
@@ -326,23 +333,24 @@ def knowledge_base_management():
 
                 with col2:
                     st.subheader("预览")
-                    data = kb_manager.get_knowledge_base(st.session_state.current_user, kb['file_id'])
+                    data = await kb_manager.get_knowledge_base(st.session_state.current_user, kb['file_id'])
                     if data:
                         preview_text = data[0]["text"][:200] + "..." if len(data[0]["text"]) > 200 else data[0]["text"]
                         st.text_area("内容预览", preview_text, height=150)
                     else:
                         st.info("暂无预览内容")
-                
+
                 with col3:
                     st.subheader("操作")
                     col_1, col_2 = st.columns(2)
                     with col_1:
                         if st.button(f"下载", key=f"download_{kb['file_id']}"):
-                            zip_buffer = kb_manager.download_knowledge_base(st.session_state.current_user, kb['file_id'])
+                            zip_buffer = await kb_manager.download_knowledge_base(st.session_state.current_user,
+                                                                            kb['file_id'])
                             if zip_buffer:
                                 st.download_button(
                                     label=f"点击下载",
-                                    data=zip_buffer,
+                                    data=zip_buffer.getvalue(),
                                     file_name=f"knowledge_{kb['file_id']}.zip",
                                     mime="application/zip",
                                     key=f"download_btn_{kb['file_id']}"
@@ -352,14 +360,14 @@ def knowledge_base_management():
 
                     with col_2:
                         if st.button(f"删除", key=f"delete_{kb['file_id']}"):
-                            if kb_manager.delete_knowledge_base(st.session_state.current_user, kb['file_id']):
+                            if await kb_manager.delete_knowledge_base(st.session_state.current_user, kb['file_id']):
                                 st.success(f"知识库 {kb['file_id']} 已删除")
                                 st.rerun()
                             else:
                                 st.error(f"删除知识库 {kb['file_id']} 失败")
 
 
-def main():
+async def main():
     st.markdown("""
     <h1 style='text-align: center;'>
         智识宝库 - 智能文档问答系统
@@ -369,8 +377,8 @@ def main():
     """, unsafe_allow_html=True)
     rag_system = RAG(embedding_model_path='G:/代码/ModelWeight/bge-m3',
                      rerank_model_path='G:/代码/ModelWeight/bge-reranker-v2-m3')
-    initialization(rag_system)
-    
+    await initialization(rag_system)
+
     with st.expander("📖 项目说明", expanded=False):
         st.markdown("""
         🌟 **智识宝库 - 智能文档问答系统** 🌟
@@ -433,7 +441,7 @@ def main():
                         st.error("用户名只能包含中文、字母和数字")
                     else:
                         st.session_state.current_user = username
-                        kb_manager.user_register(st.session_state.current_user)
+                        await kb_manager.user_register(st.session_state.current_user)
                         st.success(f"欢迎, {st.session_state.current_user}!")
 
         st.header("配置参数")
@@ -456,11 +464,11 @@ def main():
             st.info("将使用BAAI/bge-reranker-v2-m3模型对检索结果进行重排序")
     tab1, tab2, tab3 = st.tabs(['知识库管理', '知识库构建与展示', 'AI知识库问答'])
     with tab1:
-        knowledge_base_management()
+        await knowledge_base_management()
     with tab2:
-        RAG_base(rag_system)
+        await RAG_base(rag_system)
     with tab3:
-        rag_with_ai(rag_system)
+        await rag_with_ai(rag_system)
 
 
 if 'previous_page' not in st.session_state:
@@ -469,4 +477,4 @@ current_page = 'RAG'
 if current_page != st.session_state.previous_page:
     st.session_state.clear()
     st.session_state.previous_page = current_page
-main()
+asyncio.run(main())
