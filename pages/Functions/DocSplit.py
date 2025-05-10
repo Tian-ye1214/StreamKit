@@ -1,7 +1,7 @@
 import re
 
 
-def split_tex_into_paragraphs(tex_content):
+async def split_tex_into_paragraphs(tex_content):
     # 移除常见的命令和环境声明
     tex_content = re.sub(r'(?<!\\)%.*$', '', tex_content, flags=re.MULTILINE)
     tex_content = re.sub(r'\\documentclass.*?{.*?}', '', tex_content)
@@ -45,7 +45,7 @@ def split_tex_into_paragraphs(tex_content):
     return filtered_paragraphs
 
 
-def split_doc_into_paragraphs(doc_content):
+async def split_doc_into_paragraphs(doc_content):
     paragraphs = [p.strip() for p in doc_content.split('\n\n\n') if p.strip()]
 
     if len(paragraphs) < 3:
