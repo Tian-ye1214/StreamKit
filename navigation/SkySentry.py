@@ -3,25 +3,14 @@ from bs4 import BeautifulSoup
 import json
 from datetime import datetime
 import os
-from openai import OpenAI
+from openai import AsyncOpenAI
 import streamlit as st
 from pages.Functions.Constants import HIGHSPEED_MODEL_MAPPING
 from pages.Functions.Prompt import SkySentry_prompt
-
-st.markdown("""
-<style>
-    .stChatInputContainer {
-        height: 100px !important;
-    }
-    .stChatInputContainer textarea {
-        height: 100px !important;
-        font-size: 16px !important;
-    }
-</style>
-""", unsafe_allow_html=True)
+import asyncio
 
 
-def initialization():
+async def initialization():
     if 'selected_alert' not in st.session_state:
         st.session_state.selected_alert = None
         st.session_state.news_selected_alert = None
@@ -37,7 +26,7 @@ def initialization():
     if "selected_model" not in st.session_state:
         st.session_state.selected_model = "deepseek-chat"
     if "Client" not in st.session_state:
-        st.session_state.Client = OpenAI(api_key=os.environ.get('ZhiZz_API_KEY'), base_url=os.environ.get('ZhiZz_URL'))
+        st.session_state.Client = AsyncOpenAI(api_key=os.environ.get('ZhiZz_API_KEY'), base_url=os.environ.get('ZhiZz_URL'))
 
 
 class WeatherAlertCrawler:
@@ -47,10 +36,10 @@ class WeatherAlertCrawler:
         self.suffix = '.html'
         self.alerts_dict = {}
 
-    def load_existing_data(self):
+    async def load_existing_data(self):
         return list(self.alerts_dict.values())
 
-    def get_data(self):
+    async def get_data(self):
         try:
             str_html = requests.get(self.url)
             str_html.encoding = str_html.apparent_encoding
@@ -82,19 +71,19 @@ class WeatherAlertCrawler:
             st.error(f"获取数据时发生错误：{str(e)}")
             return []
 
-    def update_data(self):
+    async def update_data(self):
         """立即更新预警信息"""
         msg_counter = st.empty()
         msg_counter.info("正在更新预警信息...")
-        self.get_data()
+        await self.get_data()
         msg_counter.success("更新预警信息完毕！")
 
-    def user_query(self, province):
+    async def user_query(self, province):
         # 先更新数据
-        self.update_data()
+        await self.update_data()
 
         # 读取当前数据
-        alerts = self.load_existing_data()
+        alerts = await self.load_existing_data()
 
         # 如果用户输入"全部区域"，统计所有省份/直辖市的预警信息
         if province == "全部区域":
@@ -178,7 +167,7 @@ class WeatherAlertCrawler:
 
         return province_alerts
 
-    def get_alert_detail(self, url):
+    async def get_alert_detail(self, url):
         try:
             response = requests.get(url)
             response.encoding = response.apparent_encoding
@@ -197,9 +186,15 @@ class WeatherAlertCrawler:
 
 class WeatherAlertNewsWriter:
     def __init__(self):
-        self.defense_guides = self.load_defense_guides()
+        self.defense_guides = {}
 
-    def load_defense_guides(self):
+    @classmethod
+    async def create(cls):
+        instance = cls()
+        instance.defense_guides = await instance.load_defense_guides()
+        return instance
+
+    async def load_defense_guides(self):
         """加载防御指南JSON文件"""
         guides = {}
         try:
@@ -213,7 +208,7 @@ class WeatherAlertNewsWriter:
             st.error(f"加载预警数据库失败: {str(e)}")
             return {}
 
-    def get_defense_guide(self, region, signal_type):
+    async def get_defense_guide(self, region, signal_type):
         """获取对应的防御指南"""
         # 先尝试匹配具体地区
         key = (region, signal_type)
@@ -227,7 +222,7 @@ class WeatherAlertNewsWriter:
 
         return "暂无对应的防御指南"
 
-    def generate_news(self, alert_info, defense_guide, custom_template=None):
+    async def generate_news(self, alert_info, defense_guide, custom_template=None):
         """使用指定模板或默认模板生成预警新闻"""
         DEFAULT_NEWS_TEMPLATE = """
         四川省阿坝藏族羌族自治州若尔盖县气象台发布雷电黄色预警信号
@@ -239,27 +234,27 @@ class WeatherAlertNewsWriter:
         try:
             template_content = custom_template if custom_template else DEFAULT_NEWS_TEMPLATE
             message = SkySentry_prompt(alert_info, defense_guide, template_content, generate_news=True)
-            self._call_llm(message)
+            await self._call_llm(message)
         except Exception as e:
             st.error(f"生成新闻时发生错误：{str(e)}")
             return None
 
-    def analyze_alerts(self, alerts):
+    async def analyze_alerts(self, alerts):
         alerts_summary = []
         for alert in alerts:
             alerts_summary.append(
                 f"地区：{alert['title'].split('气象台')[0]}, 预警：{alert['title'].split('发布')[1].strip()}")
 
         messages = SkySentry_prompt(alerts_summary, None, None, generate_news=False)
-        self._call_llm(messages)
+        await self._call_llm(messages)
 
-    def _call_llm(self, messages):
+    async def _call_llm(self, messages):
         with st.spinner("正在生成回答..."):
             reason_placeholder = st.empty()
             message_placeholder = st.empty()
             content = ""
             reasoning_content = ""
-            for chunk in st.session_state.Client.chat.completions.create(
+            async for chunk in await st.session_state.Client.chat.completions.create(
                     model=st.session_state.selected_model,
                     messages=messages,
                     temperature=0.1,
@@ -286,16 +281,22 @@ class WeatherAlertNewsWriter:
 class WeatherAlertSystem(WeatherAlertCrawler):
     def __init__(self):
         super().__init__()
-        self.news_writer = WeatherAlertNewsWriter()
+        self.news_writer = None
+
+    @classmethod
+    async def create(cls):
+        instance = cls()
+        instance.news_writer = await WeatherAlertNewsWriter.create()
+        return instance
 
 
-def interaction(system):
+async def interaction(system):
     province = st.chat_input("请输入要查询的省份或者直辖市（例如：四川省、北京市）或输入'全部区域'查询全国预警信息",
                              key='query_input')
 
     if province:
         st.session_state.current_province = province
-        st.session_state.province_alerts = system.user_query(province)
+        st.session_state.province_alerts = await system.user_query(province)
         st.session_state.selected_alert = None
 
     if st.session_state.current_province and not st.session_state.province_alerts:
@@ -318,7 +319,7 @@ def interaction(system):
                         if st.button(f"{start_idx + j + 1}. {alert['title']}", key=alert_id):
                             st.session_state.selected_alert = alert_id
                             if alert_id not in st.session_state.alert_details:
-                                st.session_state.alert_details[alert_id] = system.get_alert_detail(alert['url'])
+                                st.session_state.alert_details[alert_id] = await system.get_alert_detail(alert['url'])
                 start_idx += current_alerts
 
         if st.session_state.selected_alert:
@@ -326,13 +327,13 @@ def interaction(system):
             st.markdown(st.session_state.alert_details[st.session_state.selected_alert])
 
 
-def news_generation(system, use_custom_template):
+async def news_generation(system, use_custom_template):
     province = st.chat_input("请输入要查询的省份或者直辖市（例如：四川省、北京市）",
                              key='new_generation')
 
     if province:
         st.session_state.news_current_province = province
-        st.session_state.news_province_alerts = system.user_query(province)
+        st.session_state.news_province_alerts = await system.user_query(province)
         st.session_state.news_selected_alert = None
 
     if not st.session_state.news_province_alerts and st.session_state.news_current_province:
@@ -356,7 +357,7 @@ def news_generation(system, use_custom_template):
                         if st.button(f"{start_idx + j + 1}. {alert['title']}", key=alert_id):
                             st.session_state.news_selected_alert = alert_id
                             if alert_id not in st.session_state.news_alert_details:
-                                st.session_state.news_alert_details[alert_id] = system.get_alert_detail(alert['url'])
+                                st.session_state.news_alert_details[alert_id] = await system.get_alert_detail(alert['url'])
                 start_idx += current_alerts
     if st.session_state.news_selected_alert:
         selected_alert_index = int(st.session_state.news_selected_alert.split('_')[-1]) - 1
@@ -365,16 +366,16 @@ def news_generation(system, use_custom_template):
             title = selected_alert['title']
             alert_type = title.split('发布')[1].strip()
 
-            defense_guide = system.news_writer.get_defense_guide(province, alert_type)
+            defense_guide = await system.news_writer.get_defense_guide(province, alert_type)
             st.info("\n防御指南：")
             st.markdown(defense_guide)
 
-            system.news_writer.generate_news(st.session_state.news_alert_details[st.session_state.news_selected_alert],
+            await system.news_writer.generate_news(st.session_state.news_alert_details[st.session_state.news_selected_alert],
                                              defense_guide, use_custom_template)
 
 
-def main():
-    initialization()
+async def main():
+    await initialization()
     st.markdown("""
     <h1 style='text-align: center;'>
         天眸预警 -- 实时天气预警查询
@@ -427,25 +428,25 @@ def main():
         </div>
         """, unsafe_allow_html=True)
 
-    system = WeatherAlertSystem()
+    system = await WeatherAlertSystem.create()
     tab1, tab2, tab3 = st.tabs(['查询预警信息', '总结预警信息', '撰写预警新闻'])
     with tab1:
-        interaction(system)
+        await interaction(system)
 
     with tab2:
         if st.button("分析全国预警信息"):
-            system.update_data()
-            alerts = system.load_existing_data()
+            await system.update_data()
+            alerts = await system.load_existing_data()
             if alerts:
                 st.success(f"\n共获取到 {len(alerts)} 条预警信息")
                 st.info("\n正在分析预警信息...")
-                system.news_writer.analyze_alerts(alerts)
+                await system.news_writer.analyze_alerts(alerts)
             else:
                 st.info("暂无预警信息")
 
     with tab3:
         use_custom_template = st.text_area("使用自定义模板", value=None)
-        news_generation(system, use_custom_template)
+        await news_generation(system, use_custom_template)
 
 
 if 'previous_page' not in st.session_state:
@@ -454,4 +455,4 @@ current_page = 'SkySentry'
 if current_page != st.session_state.previous_page:
     st.session_state.clear()
     st.session_state.previous_page = current_page
-main()
+asyncio.run(main())
