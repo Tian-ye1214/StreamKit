@@ -19,7 +19,8 @@ st.set_page_config(
 
 async def initialization():
     if "Client" not in st.session_state:
-        st.session_state.Client = AsyncOpenAI(api_key=os.environ.get('ZhiZz_API_KEY'), base_url=os.environ.get('ZhiZz_URL'))
+        st.session_state.Client = AsyncOpenAI(api_key=os.environ.get('ZhiZz_API_KEY'),
+                                              base_url=os.environ.get('ZhiZz_URL'))
     if "uploaded_file" not in st.session_state:
         st.session_state.uploaded_file = None
     if "TEX_content" not in st.session_state:
@@ -35,7 +36,7 @@ async def initialization():
     if "file_type" not in st.session_state:
         st.session_state.file_type = None
     if "polished_paragraph_indices" not in st.session_state:
-         st.session_state.polished_paragraph_indices = set()
+        st.session_state.polished_paragraph_indices = set()
 
     if "paragraph_to_polish" not in st.session_state:
         st.session_state.paragraph_to_polish = ""
@@ -319,14 +320,20 @@ async def Textual_polishing():
 
                 st.markdown("### 最终修改结果")
                 corrected_text = input_text
-                for match in sorted(filtered_matches, key=lambda x: -x.offset):
+
+                async def async_correct_text(match, corrected_text):
                     if match.replacements:
                         corrected_text = (
                                 corrected_text[:match.offset] +
                                 f"**{match.replacements[0]}**" +
                                 corrected_text[match.offset + match.errorLength:]
                         )
-                st.markdown(corrected_text)
+                    return corrected_text
+
+                task = [async_correct_text(match, corrected_text) for match in
+                        sorted(filtered_matches, key=lambda x: -x.offset)]
+                corrected_text = await asyncio.gather(*task)
+                st.markdown(corrected_text[0])
 
         except Exception as e:
             st.error(f"检查过程中出现错误: {str(e)}")
