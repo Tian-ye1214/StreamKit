@@ -49,6 +49,10 @@ MAX_TOKEN_LIMIT = {
     "gpt-4.1": 128000,
     "gemini-2.0-flash": 200000,
     "gpt-4.1-mini": 128000,
+    "qwen2.5-vl-72b-instruct": 16000,
+    "qwen2.5-vl-7b-instruct": 16000,
+    "gpt-4o-mini": 128000,
+    "claude-3-7-sonnet-20250219": 200000,
 }
 
 EMBEDDING_MODEL_MAPPING = {
