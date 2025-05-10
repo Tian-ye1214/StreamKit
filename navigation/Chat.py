@@ -50,8 +50,7 @@ async def main():
         """, unsafe_allow_html=True)
 
     with st.sidebar:
-        await backend.user_interaction()
-        await backend.start_new_conversation()
+        await asyncio.gather(backend.user_interaction(), backend.start_new_conversation(), backend.parameter_configuration())
 
         st.markdown("""
         <h3 style='text-align: center;'>
@@ -72,7 +71,6 @@ async def main():
         if st.session_state.model not in REASON_MODELS:
             st.session_state.system_prompt = "You are a helpful assistant."
 
-        await backend.parameter_configuration()
         st.markdown("联系作者")
         st.markdown(f"""
         📧 [Z1092228927@outlook.com](mailto:Z1092228927@outlook.com)<br>
@@ -87,12 +85,11 @@ async def main():
             st.markdown(message["content"])
 
     if prompt := st.chat_input("在这里输入您的问题："):
-        await backend.user_input(prompt)
-        await backend.search_interaction()
+        await asyncio.gather(backend.user_input(prompt), backend.search_interaction())
 
         with st.chat_message("assistant"):
             try:
-                await backend.ai_generation(sections)
+                await asyncio.gather(backend.ai_generation(sections))
             except Exception as e:
                 st.error(f"生成回答时出错: {str(e)}")
 
