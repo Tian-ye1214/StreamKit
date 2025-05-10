@@ -391,8 +391,10 @@ class BackendInteractionLogic:
         input_tokens = sum(self.count_message_tokens(msg) for msg in st.session_state.messages)
         output_tokens = self.count_tokens(assistant_response)
         st.session_state.total_tokens = input_tokens + output_tokens
-        if st.session_state.total_tokens > round(0.75 * MAX_TOKEN_LIMIT[st.session_state.model]):
+        if round(0.75 * MAX_TOKEN_LIMIT[st.session_state.model]) <= st.session_state.total_tokens < round(MAX_TOKEN_LIMIT[st.session_state.model]):
             st.warning(f"当前 {st.session_state.total_tokens} 个token将要超出模型限制。请减少输入的长度或调整模型。")
+        elif st.session_state.total_tokens >= round(MAX_TOKEN_LIMIT[st.session_state.model]):
+            st.error(f"当前 {st.session_state.total_tokens} 个token已经超出模型限制。请开启新的对话。")
 
         current_response = {"role": "assistant", "content": assistant_response}
         st.session_state.chat_messages.append(current_response)
