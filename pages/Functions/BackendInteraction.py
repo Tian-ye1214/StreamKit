@@ -8,18 +8,37 @@ from pages.Functions.Prompt import (
 from pages.Functions.UserLogManager import UserLogManager
 from pages.Functions.ExtractFileContents import encode_image_to_base64
 from pages.Functions.WebSearch import WebSearch
-from pages.Functions.Constants import SEARCH_METHODS
+from pages.Functions.Constants import SEARCH_METHODS, MAX_TOKEN_LIMIT
 from pages.Functions.js.background import particles
 from openai import OpenAI
 import re
 import os
 from PIL import Image
+import tiktoken
 
 
 class BackendInteractionLogic:
     def __init__(self):
         # particles()
         self.Placeholder = 'Hi, this is a placeholder'
+        self.encoding = tiktoken.get_encoding("cl100k_base")
+
+    def count_tokens(self, text):
+        """统计文本的token数量"""
+        return len(self.encoding.encode(text))
+
+    def count_message_tokens(self, message):
+        """统计消息的token数量"""
+        if isinstance(message, dict):
+            content = message.get("content", "")
+            if isinstance(content, list):
+                total_tokens = 0
+                for item in content:
+                    if item.get("type") == "text":
+                        total_tokens += self.count_tokens(item.get("text", ""))
+                return total_tokens
+            return self.count_tokens(content)
+        return self.count_tokens(str(message))
 
     def initialize_session_state(self):
         """
@@ -30,30 +49,26 @@ class BackendInteractionLogic:
                                                     base_url=os.environ.get('ZhiZz_URL'))
         if "chat_messages" not in st.session_state:
             st.session_state.chat_messages = []
-        if len(st.session_state.chat_messages) > 40:
-            st.session_state.chat_messages = st.session_state.chat_messages[-40:]
-
+        if len(st.session_state.chat_messages) > 20:
+            st.session_state.chat_messages = st.session_state.chat_messages[-20:]
         if "system_prompt" not in st.session_state:
             st.session_state.system_prompt = ""
-
         if "file_content" not in st.session_state:
             st.session_state.file_content = None
-
         if "current_user" not in st.session_state:
             st.session_state.current_user = None
         if "log_manager" not in st.session_state:
             st.session_state.log_manager = UserLogManager()
-
         if "current_log_filename" not in st.session_state:
             st.session_state.current_log_filename = None
-
         if "search_mode" not in st.session_state:
             st.session_state.search_mode = None
         if "search_result" not in st.session_state:
             st.session_state.search_result = None
-
         if 'uploaded_image' not in st.session_state:
             st.session_state.uploaded_image = None
+        if 'total_tokens' not in st.session_state:
+            st.session_state.total_tokens = 0
 
     def user_interaction(self):
         """
@@ -122,7 +137,7 @@ class BackendInteractionLogic:
                             help="下载选中的对话记录到本地"
                         )
             else:
-                st.info("该用户暂无历史对话记录")
+                st.info("暂无历史对话记录")
 
             if 'delete_target' in st.session_state:
                 st.warning(f"确认要永久删除记录[{st.session_state.delete_target}]吗？该过程不可逆！")
@@ -159,7 +174,7 @@ class BackendInteractionLogic:
                     scale = 512 / max(height, width)
                     new_h, new_w = int(height * scale), int(width * scale)
                     image = image.resize((new_w, new_h), Image.BILINEAR)
-                st.image(image, caption="图片预览", use_container_width=True)
+                st.image(image, caption="图片预览")
 
     def start_new_conversation(self):
         if st.button("开启新对话", help="开启新对话将清空当前对话记录"):
@@ -180,8 +195,8 @@ class BackendInteractionLogic:
                                                               help="控制回复主题的多样性性，值越高重复性越低")
                 st.session_state.max_tokens = st.number_input("Max Tokens",
                                                               min_value=1,
-                                                              max_value=8192,
-                                                              value=4096,
+                                                              max_value=64000,
+                                                              value=8192,
                                                               help="生成文本的最大长度")
 
             with col2:
@@ -286,7 +301,7 @@ class BackendInteractionLogic:
         st.session_state.chat_messages.append(st.session_state.current_prompt)
         base64_image = encode_image_to_base64(st.session_state.uploaded_image) if st.session_state.get("uploaded_image",
                                                                                                        None) else None
-        if base64_image and sections=='视觉对话':
+        if base64_image and sections == '视觉对话':
             st.session_state.messages.append({
                 "role": "user",
                 "content": [
@@ -372,12 +387,18 @@ class BackendInteractionLogic:
             </script>
             """
         st.components.v1.html(copy_script, height=30)
+        
+        input_tokens = sum(self.count_message_tokens(msg) for msg in st.session_state.messages)
+        output_tokens = self.count_tokens(assistant_response)
+        st.session_state.total_tokens = input_tokens + output_tokens
+        if st.session_state.total_tokens > round(0.75 * MAX_TOKEN_LIMIT[st.session_state.model]):
+            st.warning(f"当前 {st.session_state.total_tokens} 个token将要超出模型限制。请减少输入的长度或调整模型。")
 
         current_response = {"role": "assistant", "content": assistant_response}
         st.session_state.chat_messages.append(current_response)
 
-        if len(st.session_state.chat_messages) > 40:
-            st.session_state.chat_messages = st.session_state.chat_messages[-40:]
+        if len(st.session_state.chat_messages) > 20:
+            st.session_state.chat_messages = st.session_state.chat_messages[-20:]
 
         if st.session_state.current_user:
             new_filename = st.session_state.log_manager.save_chat_log(
@@ -392,10 +413,11 @@ class BackendInteractionLogic:
         msg_counter = st.empty()
         st.session_state.prompt = prompt
         st.session_state.current_prompt = {"role": "user", "content": st.session_state.prompt}
+
         msg_counter.markdown(f"""
         <div style='text-align: center; margin: 10px 0; font-size:14px;'>
-            当前对话消息数：<span style='color: #ff4b4b; font-weight:bold;'>{len(st.session_state.chat_messages)}</span>/40
-        </div>
+            当前Token数：<span style='color: #4b4bff; font-weight:bold;'>{st.session_state.total_tokens}</span>
+     </div>
         """, unsafe_allow_html=True)
 
         with st.chat_message("user"):
