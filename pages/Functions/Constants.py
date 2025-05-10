@@ -27,15 +27,28 @@ HIGHSPEED_MODEL_MAPPING = {
     "通义千问3-235B": "qwen3-235b-a22b",
     "通义千问3-30B": "qwen3-30b-a3b",
     "通义千问3-32B": "qwen3-32b",
-    "通义千问-Max": "qwen-max-latest",
     "智谱清言-4": "glm-4-plus",
     "豆包": "Doubao-pro-32k",
     "ChatGPT-4o": "chatgpt-4o-latest",
     "Grok-3": "grok-3",
     "GPT-4.1": "gpt-4.1",
-    "O4-mini": "o4-mini",
     "Gemini-2.0-flash": "gemini-2.0-flash",
     "GPT-4.1-mini": "gpt-4.1-mini",
+}
+
+MAX_TOKEN_LIMIT = {
+    "deepseek-chat": 64000,
+    "deepseek-reasoner": 64000,
+    "qwen3-235b-a22b": 64000,
+    "qwen3-30b-a3b": 64000,
+    "qwen3-32b": 64000,
+    "glm-4-plus": 128000,
+    "Doubao-pro-32k": 32000,
+    "chatgpt-4o-latest": 128000,
+    "grok-3": 200000,
+    "gpt-4.1": 128000,
+    "gemini-2.0-flash": 200000,
+    "gpt-4.1-mini": 128000,
 }
 
 EMBEDDING_MODEL_MAPPING = {
