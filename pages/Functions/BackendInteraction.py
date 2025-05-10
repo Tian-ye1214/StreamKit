@@ -10,7 +10,7 @@ from pages.Functions.ExtractFileContents import encode_image_to_base64
 from pages.Functions.WebSearch import WebSearch
 from pages.Functions.Constants import SEARCH_METHODS, MAX_TOKEN_LIMIT
 from pages.Functions.js.background import particles
-from openai import OpenAI
+from openai import AsyncOpenAI
 import re
 import os
 from PIL import Image
@@ -40,13 +40,13 @@ class BackendInteractionLogic:
             return self.count_tokens(content)
         return self.count_tokens(str(message))
 
-    def initialize_session_state(self):
+    async def initialize_session_state(self):
         """
         初始化各项参数，保存在session中
         """
         if "openai_client" not in st.session_state:
-            st.session_state.openai_client = OpenAI(api_key=os.environ.get('ZhiZz_API_KEY'),
-                                                    base_url=os.environ.get('ZhiZz_URL'))
+            st.session_state.openai_client = AsyncOpenAI(api_key=os.environ.get('ZhiZz_API_KEY'),
+                                                         base_url=os.environ.get('ZhiZz_URL'))
         if "chat_messages" not in st.session_state:
             st.session_state.chat_messages = []
         if len(st.session_state.chat_messages) > 20:
@@ -70,7 +70,7 @@ class BackendInteractionLogic:
         if 'total_tokens' not in st.session_state:
             st.session_state.total_tokens = 0
 
-    def user_interaction(self):
+    async def user_interaction(self):
         """
         用户注册/登录/登出
         """
@@ -161,7 +161,7 @@ class BackendInteractionLogic:
                     del st.session_state.delete_target
                     st.rerun()
 
-    def image_upload(self):
+    async def image_upload(self):
         with st.expander("图片上传", expanded=False):
             st.session_state.uploaded_image = st.file_uploader(
                 "上传图片",
@@ -176,7 +176,7 @@ class BackendInteractionLogic:
                     image = image.resize((new_w, new_h), Image.BILINEAR)
                 st.image(image, caption="图片预览")
 
-    def start_new_conversation(self):
+    async def start_new_conversation(self):
         if st.button("开启新对话", help="开启新对话将清空当前对话记录"):
             st.session_state.uploaded_image = None
             st.session_state.current_log_filename = None
@@ -184,7 +184,7 @@ class BackendInteractionLogic:
             st.success("已成功开启新的对话")
             st.rerun()
 
-    def parameter_configuration(self):
+    async def parameter_configuration(self):
         with st.expander("对话参数", expanded=False):
             col1, col2 = st.columns(2)
 
@@ -265,7 +265,7 @@ class BackendInteractionLogic:
             | 创意写作/诗歌创作 | 1.3 |
             """)
 
-    def get_system_prompt(self):
+    async def get_system_prompt(self):
         if st.session_state.file_content and st.session_state.search_result:
             return generate_combined_prompt(
                 st.session_state.file_content,
@@ -277,7 +277,7 @@ class BackendInteractionLogic:
             return generate_search_prompt(st.session_state.search_result)
         return st.session_state.system_prompt
 
-    def search_interaction(self):
+    async def search_interaction(self):
         if st.session_state.search_mode in SEARCH_METHODS:
             try:
                 search = WebSearch(query=st.session_state.prompt, max_results=st.session_state.search_max_results)
@@ -294,8 +294,8 @@ class BackendInteractionLogic:
                 st.error(f"没有检索到答案哦，错误信息:{e}")
                 st.session_state.search_result = None
 
-    def ai_generation(self, sections):
-        st.session_state.messages = [{"role": "system", "content": self.get_system_prompt()}]
+    async def ai_generation(self, sections):
+        st.session_state.messages = [{"role": "system", "content": await self.get_system_prompt()}]
         st.session_state.messages.extend([{"role": m["role"], "content": m["content"]}
                                           for m in st.session_state.chat_messages])
         st.session_state.chat_messages.append(st.session_state.current_prompt)
@@ -318,7 +318,7 @@ class BackendInteractionLogic:
             content = ""
             reasoning_content = ""
 
-            for chunk in st.session_state.openai_client.chat.completions.create(
+            async for chunk in await st.session_state.openai_client.chat.completions.create(
                     model=st.session_state.model,
                     messages=st.session_state.messages,
                     temperature=st.session_state.temperature,
@@ -346,7 +346,7 @@ class BackendInteractionLogic:
             assistant_response = content
 
         else:
-            response = st.session_state.openai_client.chat.completions.create(
+            response = await st.session_state.openai_client.chat.completions.create(
                 model=st.session_state.model,
                 messages=st.session_state.messages,
                 temperature=st.session_state.temperature,
@@ -387,11 +387,12 @@ class BackendInteractionLogic:
             </script>
             """
         st.components.v1.html(copy_script, height=30)
-        
+
         input_tokens = sum(self.count_message_tokens(msg) for msg in st.session_state.messages)
         output_tokens = self.count_tokens(assistant_response)
         st.session_state.total_tokens = input_tokens + output_tokens
-        if round(0.75 * MAX_TOKEN_LIMIT[st.session_state.model]) <= st.session_state.total_tokens < round(MAX_TOKEN_LIMIT[st.session_state.model]):
+        if round(0.75 * MAX_TOKEN_LIMIT[st.session_state.model]) <= st.session_state.total_tokens < round(
+                MAX_TOKEN_LIMIT[st.session_state.model]):
             st.warning(f"当前 {st.session_state.total_tokens} 个token将要超出模型限制。请减少输入的长度或调整模型。")
         elif st.session_state.total_tokens >= round(MAX_TOKEN_LIMIT[st.session_state.model]):
             st.error(f"当前 {st.session_state.total_tokens} 个token已经超出模型限制。请开启新的对话。")
@@ -411,7 +412,7 @@ class BackendInteractionLogic:
             if st.session_state.current_log_filename is None:
                 st.session_state.current_log_filename = new_filename
 
-    def user_input(self, prompt):
+    async def user_input(self, prompt):
         msg_counter = st.empty()
         st.session_state.prompt = prompt
         st.session_state.current_prompt = {"role": "user", "content": st.session_state.prompt}
