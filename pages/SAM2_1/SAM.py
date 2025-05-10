@@ -18,7 +18,7 @@ class SAM2Segment:
         self.mask_generator = SAM2AutomaticMaskGenerator(build_sam2(self.model_cfg, self.sam2_checkpoint
                                                                     , device=self.device, apply_postprocessing=False))
 
-    def show_mask(self, mask, color=None, image=None, box=None):
+    async def show_mask(self, mask, color=None, image=None, box=None):
         if color is None:
             color = np.array([30 / 255, 144 / 255, 255 / 255, 0.6])
         h, w = mask.shape[-2:]
@@ -38,7 +38,7 @@ class SAM2Segment:
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
         contours = [cv2.approxPolyDP(contour, epsilon=0.01, closed=True) for contour in contours]
         result = cv2.drawContours(result.astype(np.uint8), contours, -1, (255, 255, 255), thickness=2)
-        
+
         if box is not None:
             x0, y0 = int(box[0]), int(box[1])
             x1, y1 = int(box[2]), int(box[3])
@@ -46,7 +46,7 @@ class SAM2Segment:
 
         return result
 
-    def show_points(self, image, clicks):
+    async def show_points(self, image, clicks):
         if not clicks:
             return image
         result = image.copy()
@@ -62,7 +62,7 @@ class SAM2Segment:
 
         return result
 
-    def show_masks(self, image, masks):
+    async def show_masks(self, image, masks):
         """生成带有随机颜色和轮廓的掩码叠加图"""
         if len(masks) == 0:
             return np.zeros_like(image)
@@ -84,7 +84,7 @@ class SAM2Segment:
             cv2.drawContours(overlay, contours, -1, (0, 0, 1.0, 0.4), 1)
         return (overlay * 255).astype(np.uint8)
 
-    def point_and_box_inference(self, image, input_point=None, input_label=None, input_box=None):
+    async def point_and_box_inference(self, image, input_point=None, input_label=None, input_box=None):
         self.predictor.set_image(image)
         masks, scores, _ = self.predictor.predict(
             point_coords=input_point,
@@ -94,7 +94,6 @@ class SAM2Segment:
         )
         return masks
 
-
-    def auto_mask_genarator(self, image):
+    async def auto_mask_genarator(self, image):
         masks = self.mask_generator.generate(image)
         return masks
