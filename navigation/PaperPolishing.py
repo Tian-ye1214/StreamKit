@@ -1,6 +1,6 @@
 import streamlit as st
 import os
-from openai import OpenAI
+from openai import AsyncOpenAI
 import language_tool_python
 from pages.Functions.Constants import HIGHSPEED_MODEL_MAPPING
 from pages.Functions.Prompt import polishing_prompt, political_prompt, grammer_prompt
@@ -8,6 +8,7 @@ from pages.Functions.DocSplit import split_tex_into_paragraphs, split_doc_into_p
 import json
 import io
 from docx import Document
+import asyncio
 
 st.set_page_config(
     page_title="语法检查与文段润色",
@@ -16,9 +17,9 @@ st.set_page_config(
 )
 
 
-def initialization():
+async def initialization():
     if "Client" not in st.session_state:
-        st.session_state.Client = OpenAI(api_key=os.environ.get('ZhiZz_API_KEY'), base_url=os.environ.get('ZhiZz_URL'))
+        st.session_state.Client = AsyncOpenAI(api_key=os.environ.get('ZhiZz_API_KEY'), base_url=os.environ.get('ZhiZz_URL'))
     if "uploaded_file" not in st.session_state:
         st.session_state.uploaded_file = None
     if "TEX_content" not in st.session_state:
@@ -69,7 +70,7 @@ def initialization():
         st.session_state.censorship_results = {}
 
 
-def polish_text_with_llm(message, temperature=0.6):
+async def polish_text_with_llm(message, temperature=0.6):
     try:
         st.subheader("润色结果")
         content = ""
@@ -78,7 +79,7 @@ def polish_text_with_llm(message, temperature=0.6):
         with st.container(height=300):
             reason_placeholder = st.empty()
             message_placeholder = st.empty()
-            for chunk in st.session_state.Client.chat.completions.create(
+            async for chunk in await st.session_state.Client.chat.completions.create(
                     model=model,
                     messages=message,
                     temperature=temperature,
@@ -106,7 +107,7 @@ def polish_text_with_llm(message, temperature=0.6):
         return None
 
 
-def process_uploaded_file():
+async def process_uploaded_file():
     """处理上传的文件，根据文件类型提取内容"""
     if st.session_state.uploaded_file is None:
         return None
@@ -131,20 +132,20 @@ def process_uploaded_file():
         return None
 
 
-def TEX_Polishing():
+async def TEX_Polishing():
     col1, col2 = st.columns([1, 1])
     # --- 左栏：展示段落列表 ---
     with col1:
         if st.session_state.TEX_content is None:
-            st.session_state.TEX_content = process_uploaded_file()
+            st.session_state.TEX_content = await process_uploaded_file()
 
         if st.session_state.TEX_content is not None:
             # 根据文件类型选择不同的段落分割方法
             if st.session_state.file_type == 'tex':
-                st.session_state.tex_paragraphs = split_tex_into_paragraphs(st.session_state.TEX_content)
+                st.session_state.tex_paragraphs = await split_tex_into_paragraphs(st.session_state.TEX_content)
                 st.subheader("TEX 文件内容（原始段落）")
             else:
-                st.session_state.tex_paragraphs = split_doc_into_paragraphs(st.session_state.TEX_content)
+                st.session_state.tex_paragraphs = await split_doc_into_paragraphs(st.session_state.TEX_content)
                 st.subheader("Word 文档内容（原始段落）")
 
         with st.container(height=800, border=False):
@@ -195,7 +196,7 @@ def TEX_Polishing():
                 st.success("已撤销上次覆盖操作！")
                 st.session_state.paragraph_to_polish = ""
                 st.session_state.polished_paragraph = None
-                st.session_state.tex_paragraphs = split_tex_into_paragraphs(st.session_state.TEX_content)
+                st.session_state.tex_paragraphs = await split_tex_into_paragraphs(st.session_state.TEX_content)
                 st.session_state.polished_paragraph_indices = set()
                 st.rerun()
         else:
@@ -217,7 +218,7 @@ def TEX_Polishing():
                 st.session_state.polished_paragraph = None
                 with st.spinner("正在调用 LLM 进行润色..."):
                     message = polishing_prompt(st.session_state.paragraph_to_polish, st.session_state.polishing_prompt)
-                    st.session_state.polished_paragraph = polish_text_with_llm(message, temperature=0.8)
+                    st.session_state.polished_paragraph = await polish_text_with_llm(message, temperature=0.8)
 
             if st.session_state.polished_paragraph is not None:
                 polish_col1, polish_col2 = st.columns(2)
@@ -264,7 +265,7 @@ def TEX_Polishing():
             st.info("请从左侧选择一个段落进行润色")
 
 
-def Textual_polishing():
+async def Textual_polishing():
     st.subheader("文本拼写检查")
     input_text = st.text_area(
         "请输入需要检查的文本：",
@@ -339,7 +340,7 @@ def Textual_polishing():
         with st.spinner("正在使用AI进行语法审查..."):
             try:
                 message = grammer_prompt(input_text)
-                result = polish_text_with_llm(message, temperature=0.1)
+                result = await polish_text_with_llm(message, temperature=0.1)
                 try:
                     result_json = json.loads(result)
                     st.markdown("### 修正详情")
@@ -368,21 +369,21 @@ def Textual_polishing():
             return
         try:
             message = polishing_prompt(input_text, st.session_state.polishing_prompt)
-            polish_text_with_llm(message, temperature=0.8)
+            await polish_text_with_llm(message, temperature=0.8)
         except Exception as e:
             st.warning("调用大模型出错:", e)
 
 
-def Political_censorship():
+async def Political_censorship():
     if st.session_state.TEX_content is None:
-        st.session_state.TEX_content = process_uploaded_file()
+        st.session_state.TEX_content = await process_uploaded_file()
 
     if st.session_state.TEX_content is not None:
         # 根据文件类型选择不同的段落分割方法
         if st.session_state.file_type == 'tex':
-            st.session_state.tex_paragraphs = split_tex_into_paragraphs(st.session_state.TEX_content)
+            st.session_state.tex_paragraphs = await split_tex_into_paragraphs(st.session_state.TEX_content)
         else:
-            st.session_state.tex_paragraphs = split_doc_into_paragraphs(st.session_state.TEX_content)
+            st.session_state.tex_paragraphs = await split_doc_into_paragraphs(st.session_state.TEX_content)
 
     col1, col2 = st.columns([1, 1])
 
@@ -426,7 +427,7 @@ def Political_censorship():
                     try:
                         message = political_prompt(st.session_state.censorship_prompt,
                                                    st.session_state.paragraph_to_censor)
-                        content = polish_text_with_llm(message, temperature=0.1)
+                        content = await polish_text_with_llm(message, temperature=0.1)
                         st.session_state.censorship_results[
                             st.session_state.current_censorship_paragraph_index] = content
                         st.session_state.censorship_result = content
@@ -456,8 +457,8 @@ def Political_censorship():
             st.info("请从左侧选择一个段落进行政治审查")
 
 
-def main():
-    initialization()
+async def main():
+    await initialization()
     st.markdown("""
     <h1 style='text-align: center;'>
         学术炼金术 -- AI论文润色
@@ -526,7 +527,7 @@ def main():
             for key in list(st.session_state.keys()):
                 if key not in keys_to_keep:
                     del st.session_state[key]
-            initialization()
+            await initialization()
             st.rerun()
 
         st.session_state.uploaded_file = st.file_uploader(
@@ -557,17 +558,17 @@ def main():
 
     tab1, tab2, tab3 = st.tabs(['文段语法检查', 'tex文段润色', '政治审查'])
     with tab1:
-        Textual_polishing()
+        await Textual_polishing()
 
     with tab2:
         if st.session_state.uploaded_file is not None:
-            TEX_Polishing()
+            await TEX_Polishing()
         else:
             st.warning("请先上传文件！")
 
     with tab3:
         if st.session_state.uploaded_file is not None:
-            Political_censorship()
+            await Political_censorship()
         else:
             st.warning("请先上传文件！")
 
@@ -578,4 +579,4 @@ current_page = 'PaperPolishing'
 if current_page != st.session_state.previous_page:
     st.session_state.clear()
     st.session_state.previous_page = current_page
-main()
+asyncio.run(main())
