@@ -5,9 +5,10 @@ import os
 import fitz
 import numpy as np
 from pdf2zh.doclayout import OnnxModel
+import asyncio
 
 
-def translate_pdf(file, lang_in="en", lang_out="zh", service="google", thread=4, api_key=None, base_url=None,
+async def translate_pdf(file, lang_in="en", lang_out="zh", service="google", thread=4, api_key=None, base_url=None,
                   model=None):
     """使用pdf2zh翻译PDF文件"""
     try:
@@ -34,7 +35,7 @@ def translate_pdf(file, lang_in="en", lang_out="zh", service="google", thread=4,
         return None, None
 
 
-def display_pdf(file, prefix=""):
+async def display_pdf(file, prefix=""):
     """显示PDF文件
     Args:
         file: PDF文件字节流
@@ -43,7 +44,7 @@ def display_pdf(file, prefix=""):
     pdf_bytes = file
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     total_pages = doc.page_count
-    
+
     if total_pages <= 1:
         page_number = 0
         if total_pages == 1:
@@ -57,7 +58,7 @@ def display_pdf(file, prefix=""):
             key=f"slider_{prefix}",
             label_visibility="collapsed"
         )
-    
+
     page = doc.load_page(page_number)
     pix = page.get_pixmap()
     img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, pix.n)
@@ -70,8 +71,7 @@ def display_pdf(file, prefix=""):
     )
 
 
-def main():
-
+async def main():
     if 'mono_result' not in st.session_state:
         st.session_state.mono_result = None
     if 'dual_result' not in st.session_state:
@@ -176,12 +176,12 @@ def main():
 
         with col1:
             st.markdown("### 原文")
-            display_pdf(uploaded_file.getvalue(), prefix="original")
+            await display_pdf(uploaded_file.getvalue(), prefix="original")
 
         with col2:
             st.markdown("### 译文")
             if st.session_state.mono_result is not None:
-                display_pdf(st.session_state.mono_result, prefix="translated")
+                await display_pdf(st.session_state.mono_result, prefix="translated")
 
                 st.success("翻译完成！请选择下载版本：")
                 download_col1, download_col2 = st.columns(2)
@@ -214,7 +214,7 @@ def main():
                 lang_in = lang_code_map[source_language]
                 lang_out = lang_code_map[target_language]
 
-                mono_result, dual_result = translate_pdf(
+                mono_result, dual_result = await translate_pdf(
                     file=uploaded_file,
                     lang_in=lang_in,
                     lang_out=lang_out,
@@ -235,6 +235,6 @@ if 'previous_page' not in st.session_state:
     st.session_state.previous_page = 'PDFTranslator'
 current_page = 'PDFTranslator'
 if current_page != st.session_state.previous_page:
-        st.session_state.clear()
-        st.session_state.previous_page = current_page
-main()
+    st.session_state.clear()
+    st.session_state.previous_page = current_page
+asyncio.run(main())
