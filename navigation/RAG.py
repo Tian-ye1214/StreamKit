@@ -220,7 +220,7 @@ async def RAG_base(rag_system):
                         st.write(f"共 {len(existing_kb)} 段，已加载。")
                         continue
                     else:
-                        text = extract_text(uploaded_file)
+                        text = await extract_text(uploaded_file)
                         chunks = await rag_system.split_text(text, chunk_size=st.session_state.chunk_size,
                                                              special_chars=st.session_state.special_chars,
                                                              overlap=st.session_state.overlap)
