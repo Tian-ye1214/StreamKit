@@ -86,9 +86,9 @@ class BackendInteractionLogic:
                         st.error("用户名只能包含中文、字母和数字")
                     else:
                         st.session_state.current_user = username
-                        if not st.session_state.log_manager.check_user_exists(username):
+                        if not await st.session_state.log_manager.check_user_exists(username):
                             st.success(f"欢迎 {'新用户'} ")
-                            st.session_state.log_manager.user_register(username)
+                            await st.session_state.log_manager.user_register(username)
                         else:
                             st.success(f"欢迎 {'回来'} {username}！")
         if st.session_state.current_user:
@@ -104,14 +104,14 @@ class BackendInteractionLogic:
                     st.rerun()
 
             # 历史记录查询
-            history_logs = st.session_state.log_manager.get_user_history(st.session_state.current_user)
+            history_logs = await st.session_state.log_manager.get_user_history(st.session_state.current_user)
             if len(history_logs) > 0:
                 st.markdown("### 历史对话")
                 selected_log = st.selectbox("选择历史记录", history_logs)
                 col1, col2, col3 = st.columns([1, 1, 1])
                 with col1:
                     if st.button("加载记录", help="读取并加载选中的对话记录"):
-                        chat_log = st.session_state.log_manager.load_chat_log(
+                        chat_log = await st.session_state.log_manager.load_chat_log(
                             st.session_state.current_user,
                             selected_log
                         )
@@ -124,7 +124,7 @@ class BackendInteractionLogic:
                         st.session_state.delete_target = selected_log
 
                 with col3:
-                    json_data = st.session_state.log_manager.get_log_filepath(
+                    json_data = await st.session_state.log_manager.get_log_filepath(
                         st.session_state.current_user,
                         selected_log + '.json'
                     )
@@ -143,7 +143,7 @@ class BackendInteractionLogic:
                 st.warning(f"确认要永久删除记录[{st.session_state.delete_target}]吗？该过程不可逆！")
                 if st.button("确认删除", type="primary"):
                     try:
-                        success = st.session_state.log_manager.delete_chat_log(
+                        success = await st.session_state.log_manager.delete_chat_log(
                             st.session_state.current_user,
                             st.session_state.delete_target + '.json'
                         )
@@ -404,7 +404,7 @@ class BackendInteractionLogic:
             st.session_state.chat_messages = st.session_state.chat_messages[-20:]
 
         if st.session_state.current_user:
-            new_filename = st.session_state.log_manager.save_chat_log(
+            new_filename = await st.session_state.log_manager.save_chat_log(
                 st.session_state.current_user,
                 [st.session_state.current_prompt, current_response],
                 log_filename=st.session_state.current_log_filename
