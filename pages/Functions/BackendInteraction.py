@@ -224,7 +224,7 @@ class BackendInteractionLogic:
 
             if uploaded_file:
                 try:
-                    file_content = extract_text(uploaded_file)
+                    file_content = await extract_text(uploaded_file)
                     if file_content:
                         st.session_state.file_content = file_content
                         st.success("文件上传成功！")
@@ -299,7 +299,7 @@ class BackendInteractionLogic:
         st.session_state.messages.extend([{"role": m["role"], "content": m["content"]}
                                           for m in st.session_state.chat_messages])
         st.session_state.chat_messages.append(st.session_state.current_prompt)
-        base64_image = encode_image_to_base64(st.session_state.uploaded_image) if st.session_state.get("uploaded_image",
+        base64_image = await encode_image_to_base64(st.session_state.uploaded_image) if st.session_state.get("uploaded_image",
                                                                                                        None) else None
         if base64_image and sections == '视觉对话':
             st.session_state.messages.append({
