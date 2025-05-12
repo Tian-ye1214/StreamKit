@@ -5,7 +5,7 @@ import base64
 import streamlit as st
 
 
-def encode_image_to_base64(uploaded_file):
+async def encode_image_to_base64(uploaded_file):
     if uploaded_file is None:
         return None
     try:
@@ -17,7 +17,7 @@ def encode_image_to_base64(uploaded_file):
         return None
 
 
-def extract_text_from_pdf(file):
+async def extract_text_from_pdf(file):
     try:
         content = ""
         pdf_bytes = file.getvalue()
@@ -37,7 +37,7 @@ def extract_text_from_pdf(file):
         return None
 
 
-def extract_text_from_excel(file):
+async def extract_text_from_excel(file):
     df = pd.read_excel(file)
     content = ""
     for column in df.columns:
@@ -46,7 +46,7 @@ def extract_text_from_excel(file):
     return content
 
 
-def extract_text_from_docx(docx_file):
+async def extract_text_from_docx(docx_file):
     """从Word文件中提取文本"""
     doc = docx.Document(docx_file)
     text = ""
@@ -55,21 +55,21 @@ def extract_text_from_docx(docx_file):
     return text
 
 
-def extract_text_from_txt(file):
+async def extract_text_from_txt(file):
     return file.getvalue().decode('utf-8')
 
 
-def extract_text(file):
+async def extract_text(file):
     file_type = file.name.split('.')[-1].lower()
     try:
         if file_type == 'pdf':
-            return extract_text_from_pdf(file)
+            return await extract_text_from_pdf(file)
         elif file_type in ['doc', 'docx']:
-            return extract_text_from_docx(file)
+            return await extract_text_from_docx(file)
         elif file_type in ['xlsx', 'xls']:
-            return extract_text_from_excel(file)
+            return await extract_text_from_excel(file)
         elif file_type == 'txt':
-            return extract_text_from_txt(file)
+            return await extract_text_from_txt(file)
         else:
             raise ValueError(f"不支持的文件格式：{file_type}")
     except Exception as e:
