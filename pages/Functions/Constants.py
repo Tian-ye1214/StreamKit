@@ -1,26 +1,3 @@
-MODEL_MAPPING = {
-    "DeepSeek-V3-0324": "Pro/deepseek-ai/DeepSeek-V3",
-    "DeepSeek-R1": "Pro/deepseek-ai/DeepSeek-R1",
-    "QwQ-32B": "Qwen/QwQ-32B",
-    "R1-Distill-Qwen-32B": "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B",
-    "R1-Distill-Qwen-14B": "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B",
-    "R1-Distill-Qwen-7B": "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
-    "Qwen2.5-72B": "Qwen/Qwen2.5-72B-Instruct-128K",
-    "Qwen2.5-32B": "Qwen/Qwen2.5-32B-Instruct",
-}
-
-VISIONMODAL_MAPPING = {
-    "Qwen2.5-VL-72B": "qwen2.5-vl-72b-instruct",
-    "Qwen2.5-VL-7B": "qwen2.5-vl-7b-instruct",
-    "GPT-4.1-mini": "gpt-4.1-mini",
-    "GPT-4o-mini": "gpt-4o-mini",
-    "Gemini-2.0": "gemini-2.0-flash",
-    "ChatGPT-4o": "chatgpt-4o-latest",
-    "GPT-4.1": "gpt-4.1",
-    "O4-mini": "o4-mini",
-    "Claude3.7": "claude-3-7-sonnet-20250219",
-}
-
 HIGHSPEED_MODEL_MAPPING = {
     "DeepSeek-V3": "deepseek-chat",
     "DeepSeek-R1": "deepseek-reasoner",
@@ -30,10 +7,20 @@ HIGHSPEED_MODEL_MAPPING = {
     "智谱清言-4": "glm-4-plus",
     "豆包": "Doubao-pro-32k",
     "ChatGPT-4o": "chatgpt-4o-latest",
-    "Grok-3": "grok-3",
+    "Grok-3-mini-fast": "grok-3-mini-fast-beta",
     "GPT-4.1": "gpt-4.1",
-    "Gemini-2.0-flash": "gemini-2.0-flash",
+    "Gemini-2.5-flash": "gemini-2.5-flash-preview-04-17",
     "GPT-4.1-mini": "gpt-4.1-mini",
+}
+
+VISIONMODAL_MAPPING = {
+    "Qwen2.5-VL-72B": "qwen2.5-vl-72b-instruct",
+    "Qwen2.5-VL-7B": "qwen2.5-vl-7b-instruct",
+    "GPT-4.1-mini": "gpt-4.1-mini",
+    "Gemini-2.5-flash": "gemini-2.5-flash-preview-04-17",
+    "ChatGPT-4o": "chatgpt-4o-latest",
+    "GPT-4.1": "gpt-4.1",
+    "Claude3.7": "claude-3-7-sonnet-20250219",
 }
 
 MAX_TOKEN_LIMIT = {
@@ -45,13 +32,11 @@ MAX_TOKEN_LIMIT = {
     "glm-4-plus": 128000,
     "Doubao-pro-32k": 32000,
     "chatgpt-4o-latest": 128000,
-    "grok-3": 200000,
+    "grok-3-mini-fast-beta": 200000,
     "gpt-4.1": 128000,
-    "gemini-2.0-flash": 200000,
     "gpt-4.1-mini": 128000,
     "qwen2.5-vl-72b-instruct": 16000,
     "qwen2.5-vl-7b-instruct": 16000,
-    "gpt-4o-mini": 128000,
     "claude-3-7-sonnet-20250219": 200000,
 }
 
