@@ -30,6 +30,7 @@ python-dotenv
 
 tenacity
 tiktoken
+peft
 
 git+https://github.com/facebookresearch/sam2.git
 
