@@ -391,8 +391,14 @@ class BackendInteractionLogic:
         input_tokens = sum(self.count_message_tokens(msg) for msg in st.session_state.messages)
         output_tokens = self.count_tokens(assistant_response)
         st.session_state.total_tokens = input_tokens + output_tokens
-        if round(0.75 * MAX_TOKEN_LIMIT[st.session_state.model]) <= st.session_state.total_tokens < round(
-                MAX_TOKEN_LIMIT[st.session_state.model]):
+
+        st.session_state.token_counter.markdown(f"""
+           <div style='text-align: center; margin: 10px 0; font-size:14px;'>
+               当前Token数：<span style='color: #4b4bff; font-weight:bold;'>{st.session_state.total_tokens}</span>
+        </div>
+           """, unsafe_allow_html=True)
+
+        if round(0.75 * MAX_TOKEN_LIMIT[st.session_state.model]) <= st.session_state.total_tokens < MAX_TOKEN_LIMIT[st.session_state.model]:
             st.warning(f"当前 {st.session_state.total_tokens} 个token将要超出模型限制。请减少输入的长度或调整模型。")
         elif st.session_state.total_tokens >= round(MAX_TOKEN_LIMIT[st.session_state.model]):
             st.error(f"当前 {st.session_state.total_tokens} 个token已经超出模型限制。请开启新的对话。")
@@ -413,15 +419,8 @@ class BackendInteractionLogic:
                 st.session_state.current_log_filename = new_filename
 
     async def user_input(self, prompt):
-        msg_counter = st.empty()
+        st.session_state.token_counter = st.empty()
         st.session_state.prompt = prompt
         st.session_state.current_prompt = {"role": "user", "content": st.session_state.prompt}
-
-        msg_counter.markdown(f"""
-        <div style='text-align: center; margin: 10px 0; font-size:14px;'>
-            当前Token数：<span style='color: #4b4bff; font-weight:bold;'>{st.session_state.total_tokens}</span>
-     </div>
-        """, unsafe_allow_html=True)
-
         with st.chat_message("user"):
             st.markdown(st.session_state.prompt)
