@@ -52,7 +52,7 @@ class BackendInteractionLogic:
         if len(st.session_state.chat_messages) > 20:
             st.session_state.chat_messages = st.session_state.chat_messages[-20:]
         if "system_prompt" not in st.session_state:
-            st.session_state.system_prompt = ""
+            st.session_state.system_prompt = "You are a helpful assistant."
         if "file_content" not in st.session_state:
             st.session_state.file_content = None
         if "current_user" not in st.session_state:
@@ -170,8 +170,8 @@ class BackendInteractionLogic:
             if st.session_state.uploaded_image:
                 image = Image.open(st.session_state.uploaded_image)
                 width, height = image.size
-                if width > 512 or height > 512:
-                    scale = 512 / max(height, width)
+                if width > 256 or height > 256:
+                    scale = 256 / max(height, width)
                     new_h, new_w = int(height * scale), int(width * scale)
                     image = image.resize((new_w, new_h), Image.BILINEAR)
                 st.image(image, caption="图片预览")
@@ -195,7 +195,7 @@ class BackendInteractionLogic:
                                                               help="控制回复主题的多样性性，值越高重复性越低")
                 st.session_state.max_tokens = st.number_input("Max Tokens",
                                                               min_value=1,
-                                                              max_value=64000,
+                                                              max_value=32768,
                                                               value=8192,
                                                               help="生成文本的最大长度")
 
@@ -253,17 +253,6 @@ class BackendInteractionLogic:
                                                                       max_value=5,
                                                                       value=3,
                                                                       help="设置最大返回的搜索结果数量")
-
-        with st.expander("Temperature参数使用推荐", expanded=False):
-            st.markdown("""
-            | 场景 | 温度 |
-            |------|------|
-            | 代码生成/数学解题 | 0.0 |
-            | 数据抽取/分析/推理 | 0.6 |
-            | 通用对话 | 0.8 |
-            | 翻译 | 1.0 |
-            | 创意写作/诗歌创作 | 1.3 |
-            """)
 
     async def get_system_prompt(self):
         if st.session_state.file_content and st.session_state.search_result:
