@@ -2,7 +2,7 @@ import streamlit as st
 import hashlib
 import numpy as np
 import torch
-from transformers import AutoTokenizer, AutoModel, AutoModelForSequenceClassification
+from transformers import AutoTokenizer, AutoModel, AutoModelForCausalLM
 from pages.Functions.ExtractFileContents import extract_text
 from sklearn.metrics.pairwise import cosine_similarity
 from pages.Functions.UserLogManager import KnowledgeBaseManager
@@ -21,20 +21,41 @@ class RAG:
         self.embedding_model_path = embedding_model_path
         self.rerank_model_path = rerank_model_path
         self.DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-
         self.all_results = []
+
+    def last_token_pool(self, last_hidden_states: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
+        """获取每个序列最后一个有效token的embedding"""
+        left_padding = (attention_mask[:, -1].sum() == attention_mask.shape[0])
+        if left_padding:
+            return last_hidden_states[:, -1]
+        else:
+            sequence_lengths = attention_mask.sum(dim=1) - 1
+            batch_size = last_hidden_states.shape[0]
+            return last_hidden_states[torch.arange(batch_size, device=last_hidden_states.device), sequence_lengths]
+
+    def format_instruction(self, instruction, query, doc, type='embedding'):
+        if instruction is None:
+            instruction = 'Given a search query, retrieve relevant passages that answer the query'
+        if type == 'embedding':
+            return f'Instruct: {instruction}\nQuery: {query}'
+        else:
+            output = "<Instruct>: {instruction}\n<Query>: {query}\n<Document>: {doc}".format(
+                instruction=instruction, query=query, doc=doc)
+        return output
 
     # 1. 定义 embedding 函数
     async def hf_embed(self, texts: list[str], tokenizer, embed_model) -> np.ndarray:
+        texts_with_instruct = [self.format_instruction(None, text, None, 'embedding') for text in texts]
         encoded_texts = tokenizer(
-            texts, return_tensors="pt", padding=True, truncation=True
+            texts_with_instruct, return_tensors="pt", padding=True, truncation=True, max_length=8192
         ).to(self.DEVICE)
         with torch.no_grad():
             outputs = embed_model(
                 input_ids=encoded_texts["input_ids"],
                 attention_mask=encoded_texts["attention_mask"],
             )
-            embeddings = outputs.last_hidden_state.mean(dim=1)
+            embeddings = self.last_token_pool(outputs.last_hidden_state, encoded_texts["attention_mask"])
+            embeddings = torch.nn.functional.normalize(embeddings, p=2, dim=1)
         if embeddings.dtype == torch.bfloat16:
             return embeddings.detach().to(torch.float32).cpu().numpy()
         else:
@@ -84,7 +105,7 @@ class RAG:
         return hashlib.md5(file_bytes).hexdigest()
 
     # 4. 加载模型函数
-    async def load_model(self):
+    async def load_embedding_model(self):
         tokenizer = AutoTokenizer.from_pretrained(self.embedding_model_path)
         embed_model = AutoModel.from_pretrained(self.embedding_model_path, torch_dtype=torch.bfloat16)
         embed_model.eval()
@@ -93,26 +114,55 @@ class RAG:
 
     # 5. 加载rerank模型函数
     async def load_rerank_model(self):
-        tokenizer = AutoTokenizer.from_pretrained(self.rerank_model_path)
-        model = AutoModelForSequenceClassification.from_pretrained(self.rerank_model_path, torch_dtype=torch.bfloat16)
+        tokenizer = AutoTokenizer.from_pretrained(self.rerank_model_path, padding_side='left')
+        model = AutoModelForCausalLM.from_pretrained(self.rerank_model_path, torch_dtype=torch.bfloat16)
         model.eval()
         model.to(self.DEVICE)
+        # 初始化特殊token
+        self.token_false_id = tokenizer.convert_tokens_to_ids("no")
+        self.token_true_id = tokenizer.convert_tokens_to_ids("yes")
+
+        self.prefix = "<|im_start|>system\nJudge whether the Document meets the requirements based on the Query and the Instruct provided. Note that the answer can only be \"yes\" or \"no\".<|im_end|>\n<|im_start|>user\n"
+        self.suffix = "<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
+        self.prefix_tokens = tokenizer.encode(self.prefix, add_special_tokens=False)
+        self.suffix_tokens = tokenizer.encode(self.suffix, add_special_tokens=False)
+        
         return tokenizer, model
+
+    def process_inputs(self, pairs, tokenizer):
+        inputs = tokenizer(
+            pairs, padding=False, truncation='longest_first',
+            return_attention_mask=False, max_length=8192 - len(self.prefix_tokens) - len(self.suffix_tokens)
+        )
+        for i, ele in enumerate(inputs['input_ids']):
+            inputs['input_ids'][i] = self.prefix_tokens + ele + self.suffix_tokens
+        inputs = tokenizer.pad(inputs, padding=True, return_tensors="pt", max_length=8192)
+        for key in inputs:
+            inputs[key] = inputs[key].to(self.DEVICE)
+        return inputs
+
+    @torch.no_grad()
+    def compute_logits(self, inputs, model):
+        batch_scores = model(**inputs).logits[:, -1, :]
+        true_vector = batch_scores[:, self.token_true_id]
+        false_vector = batch_scores[:, self.token_false_id]
+        batch_scores = torch.stack([false_vector, true_vector], dim=1)
+        batch_scores = torch.nn.functional.log_softmax(batch_scores, dim=1)
+        scores = batch_scores[:, 1].exp().tolist()
+        return scores
 
     # 6. 使用rerank模型重排序
     async def rerank_results(self, query, results, tokenizer, model, top_k):
         if not results:
             return []
+        # 准备输入对
+        pairs = [self.format_instruction(None, query, result["text"], type='rerank') for result in results]
 
-        pairs = [[query, result["text"]] for result in results]
-
-        # 使用模型计算分数
         with torch.no_grad():
-            inputs = tokenizer(pairs, padding=True, truncation=True, return_tensors='pt', max_length=512).to(
-                self.DEVICE)
-            logits = model(**inputs, return_dict=True).logits.view(-1, ).float()
-            scores = torch.softmax(logits, dim=0).cpu().numpy()
+            inputs = self.process_inputs(pairs, tokenizer)
+            scores = self.compute_logits(inputs, model)
 
+        # 更新结果分数并排序
         for i, score in enumerate(scores):
             results[i]["rerank_score"] = float(score)
         results.sort(key=lambda x: x["rerank_score"], reverse=True)
@@ -121,7 +171,6 @@ class RAG:
 
     async def retrieval_from_kb(self, kb, query_embedding, all_results):
         data = await kb_manager.get_knowledge_base(st.session_state.current_user, kb['file_id'])
-
         # 计算相似度
         embeddings = np.array([item["embedding"] for item in data])
         similarities = cosine_similarity([query_embedding], embeddings)[0]
@@ -175,7 +224,7 @@ async def initialization(rag_system):
     if 'selected_model' not in st.session_state:
         st.session_state.selected_model = "deepseek-chat"
     if 'embed_model' not in st.session_state:
-        st.session_state.tokenizer, st.session_state.embed_model = await rag_system.load_model()
+        st.session_state.tokenizer, st.session_state.embed_model = await rag_system.load_embedding_model()
 
 
 async def RAG_base(rag_system):
@@ -378,8 +427,8 @@ async def main():
     <div style='text-align: center; margin-bottom: 20px;'>
     </div>
     """, unsafe_allow_html=True)
-    rag_system = RAG(embedding_model_path='G:/代码/ModelWeight/bge-m3',
-                     rerank_model_path='G:/代码/ModelWeight/bge-reranker-v2-m3')
+    rag_system = RAG(embedding_model_path='',
+                     rerank_model_path='')
     await initialization(rag_system)
 
     with st.expander("📖 项目说明", expanded=False):
@@ -413,9 +462,8 @@ async def main():
            - 推理过程可视化
 
         ⚙️ **技术特点**：
-        - 使用BGE-M3模型进行文本向量化
-        - 支持BGE-Reranker进行结果重排序
-        - 基于Streamlit的交互式界面
+        - 使用Qwen3-embedding模型进行文本向量化
+        - 支持Qwen3-reranker进行结果重排序
         - 支持多用户知识库隔离
 
         💡 **使用建议**：
@@ -464,7 +512,7 @@ async def main():
         st.session_state.top_k = st.number_input("返回最相似的段落数", min_value=1, max_value=20, value=5, step=1)
         st.session_state.use_rerank = st.checkbox("启用Rerank重排序", value=False)
         if st.session_state.use_rerank:
-            st.info("将使用BAAI/bge-reranker-v2-m3模型对检索结果进行重排序")
+            st.info("将使用Qwen3-reranker模型对检索结果进行重排序")
     tab1, tab2, tab3 = st.tabs(['知识库管理', '知识库构建与展示', 'AI知识库问答'])
     with tab1:
         await knowledge_base_management()
