@@ -1,3 +1,4 @@
+import json
 import streamlit as st
 import hashlib
 import numpy as np
@@ -6,7 +7,7 @@ from transformers import AutoTokenizer, AutoModel, AutoModelForCausalLM
 from pages.Functions.ExtractFileContents import extract_text
 from sklearn.metrics.pairwise import cosine_similarity
 from pages.Functions.UserLogManager import KnowledgeBaseManager
-from pages.Functions.Prompt import rag_prompt
+from pages.Functions.Prompt import rag_prompt, IntentRecognition
 from openai import OpenAI
 from pages.Functions.Constants import HIGHSPEED_MODEL_MAPPING
 import os
@@ -197,7 +198,7 @@ class RAG:
         if st.session_state.use_rerank:
             with st.spinner("正在使用Rerank模型重排序..."):
                 rerank_tokenizer, rerank_model = await self.load_rerank_model()
-                candidate_results = self.all_results[:min(st.session_state.top_k * 4, len(self.all_results))]
+                candidate_results = self.all_results[:min(st.session_state.top_k * 3, len(self.all_results))]
                 top_results = await self.rerank_results(user_input, candidate_results, rerank_tokenizer,
                                                         rerank_model,
                                                         st.session_state.top_k)
@@ -212,7 +213,7 @@ async def initialization(rag_system):
     if "special_chars" not in st.session_state:
         st.session_state.special_chars = ""
     if "top_k" not in st.session_state:
-        st.session_state.top_k = 5
+        st.session_state.top_k = 2
     if "use_rerank" not in st.session_state:
         st.session_state.use_rerank = False
     if "Client" not in st.session_state:
@@ -305,10 +306,21 @@ async def rag_with_ai(rag_system):
         return
 
     if user_input := st.chat_input("在这里输入您的问题：", key="rag_ai_input"):
-        top_results = await rag_system.retrieval(user_input, st.session_state.tokenizer, st.session_state.embed_model,
-                                                 knowledge_bases)
-
-        context = "\n\n".join([f"参考内容 {i + 1}:\n{result['text']}" for i, result in enumerate(top_results)])
+        top_results = []
+        with st.spinner('意图识别中：'):
+            Intentmessage = IntentRecognition(user_input)
+            response = st.session_state.Client.chat.completions.create(
+                model='deepseek-chat',
+                messages=Intentmessage,
+                temperature=0.6,
+                max_tokens=8192,
+            )
+            st.markdown(f'识别到意图:{response.choices[0].message.content}')
+            user_intents = json.loads(response.choices[0].message.content)
+        for user_intent in user_intents.values():
+            top_results.extend(await rag_system.retrieval(user_intent, st.session_state.tokenizer,
+                                                          st.session_state.embed_model, knowledge_bases))
+        context = "\n".join([f"参考内容 {i + 1}:\n{result['text']}" for i, result in enumerate(top_results)])
         message = rag_prompt(user_input, context)
 
         with st.spinner("正在生成回答..."):
@@ -427,8 +439,8 @@ async def main():
     <div style='text-align: center; margin-bottom: 20px;'>
     </div>
     """, unsafe_allow_html=True)
-    rag_system = RAG(embedding_model_path='',
-                     rerank_model_path='')
+    rag_system = RAG(embedding_model_path='G:/代码/ModelWeight/Qwen3-embedding',
+                     rerank_model_path='G:/代码/ModelWeight/Qwen3-rerank')
     await initialization(rag_system)
 
     with st.expander("📖 项目说明", expanded=False):
@@ -509,7 +521,7 @@ async def main():
         st.session_state.special_chars = st.text_input("特殊分隔符（用英文逗号分隔）", value="")
         st.session_state.special_chars = [char.strip() for char in st.session_state.special_chars.split(
             ",")] if st.session_state.special_chars else None
-        st.session_state.top_k = st.number_input("返回最相似的段落数", min_value=1, max_value=20, value=5, step=1)
+        st.session_state.top_k = st.number_input("返回最相似的段落数", min_value=1, max_value=20, value=2, step=1)
         st.session_state.use_rerank = st.checkbox("启用Rerank重排序", value=False)
         if st.session_state.use_rerank:
             st.info("将使用Qwen3-reranker模型对检索结果进行重排序")
