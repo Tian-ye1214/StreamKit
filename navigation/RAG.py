@@ -226,6 +226,8 @@ async def initialization(rag_system):
         st.session_state.selected_model = "deepseek-chat"
     if 'embed_model' not in st.session_state:
         st.session_state.tokenizer, st.session_state.embed_model = await rag_system.load_embedding_model()
+    if 'intent' not in st.session_state:
+        st.session_state.intent = False
 
 
 async def RAG_base(rag_system):
@@ -307,19 +309,22 @@ async def rag_with_ai(rag_system):
 
     if user_input := st.chat_input("在这里输入您的问题：", key="rag_ai_input"):
         top_results = []
-        with st.spinner('意图识别中：'):
-            Intentmessage = IntentRecognition(user_input)
-            response = st.session_state.Client.chat.completions.create(
-                model='deepseek-chat',
-                messages=Intentmessage,
-                temperature=0.6,
-                max_tokens=8192,
-            )
-            st.markdown(f'识别到意图:{response.choices[0].message.content}')
-            user_intents = json.loads(response.choices[0].message.content)
-        for user_intent in user_intents.values():
-            top_results.extend(await rag_system.retrieval(user_intent, st.session_state.tokenizer,
-                                                          st.session_state.embed_model, knowledge_bases))
+        if st.session_state.intent:
+            with st.spinner('意图识别中：'):
+                Intentmessage = IntentRecognition(user_input)
+                response = st.session_state.Client.chat.completions.create(
+                    model='deepseek-chat',
+                    messages=Intentmessage,
+                    temperature=0.6,
+                    max_tokens=8192,
+                )
+                st.markdown(f'识别到意图:{response.choices[0].message.content}')
+                user_intents = json.loads(response.choices[0].message.content)
+            for user_intent in user_intents.values():
+                top_results.extend(await rag_system.retrieval(user_intent, st.session_state.tokenizer,
+                                                              st.session_state.embed_model, knowledge_bases))
+        else:
+            top_results = await rag_system.retrieval(user_input, st.session_state.tokenizer, st.session_state.embed_model, knowledge_bases)
         context = "\n".join([f"参考内容 {i + 1}:\n{result['text']}" for i, result in enumerate(top_results)])
         message = rag_prompt(user_input, context)
 
@@ -522,7 +527,8 @@ async def main():
         st.session_state.special_chars = [char.strip() for char in st.session_state.special_chars.split(
             ",")] if st.session_state.special_chars else None
         st.session_state.top_k = st.number_input("返回最相似的段落数", min_value=1, max_value=20, value=2, step=1)
-        st.session_state.use_rerank = st.checkbox("启用Rerank重排序", value=False)
+        st.session_state.intent = st.checkbox("是否启用意图识别", value=False, help="启用意图识别可以调用大模型检索多个子意图")
+        st.session_state.use_rerank = st.checkbox("是否启用Rerank重排序", value=False, help="启用rerank会二次过滤检索chunk")
         if st.session_state.use_rerank:
             st.info("将使用Qwen3-reranker模型对检索结果进行重排序")
     tab1, tab2, tab3 = st.tabs(['知识库管理', '知识库构建与展示', 'AI知识库问答'])
