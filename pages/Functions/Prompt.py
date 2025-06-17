@@ -355,11 +355,10 @@ def rag_prompt(user_input, context):
 
     ```plaintext
     [问题分析]
-    识别问题核心关键词：{user_input}
+    识别问题核心：{user_input}
 
     [片段匹配]
     已检索到相关片段：
-
     {context}
 
     [回答要求]
@@ -367,15 +366,75 @@ def rag_prompt(user_input, context):
     2. 输出结构：
        ### 问题回答
        [内容主体]
-
        ### 参考资料
        - 片段编号 | 关键信息摘要
     3. 无匹配时返回："根据提供资料，该问题暂无可靠解答"
     """
-
     message = [
         {"role": "system", "content": rag_system_prompt},
         {"role": "user", "content": rag_user_prompt},
     ]
 
+    return message
+
+
+def IntentRecognition(user_input):
+    system_prompt = """
+    # 角色使命
+    你是一个意图解析专家，负责将用户查询拆解为多个独立、明确的子意图。请遵循以下规则：
+    1. **识别核心实体**：提取查询中所有人名、实体名、关系等关键实体。
+    2. **拆解复合问题**：若查询隐含多个独立问题，按逻辑顺序分解为原子意图。
+    3. **意图规范化**：每个子意图必须是完整问句，包含主谓宾结构，且不丢失原查询信息。
+    4. **输出格式**：用数字序号（如1. 2.）列出所有子意图，无需解释。
+    
+    ## 输出格式
+      - JSON 数组格式必须正确
+      - 字段名使用英文双引号
+      - 输出的 JSON 数组必须严格符合以下结构：
+        {
+        "Intent1":"Question1",
+        "Intent2":"Question2",
+        "Intent3":"Question3",
+        ...
+        }
+
+    ## 输入示例1：
+        "什么是CNN？它与Transformer的异同？"
+    ## 输出示例1
+        {
+        "Intent1":"什么是CNN？",
+        "Intent2":"什么是Transformer？",
+        "Intent3":"CNN与Transformer有什么相同处？",
+        "Intent4":"CNN与Transformer有什么不同处？"
+        }
+    
+    ## 输入示例2：
+        "显卡有什么用处？"
+    ## 输出示例2
+        {
+        "Intent1":"什么是显卡？",
+        "Intent2":"显卡的简单介绍？",
+        "Intent3":"显卡的作用？",
+        "Intent4":"显卡的由来？"
+        }
+        
+    ## 输入示例3：
+        "订单号12345的物流停在广州三天了，什么时候能到？还有，我上个月的退款为什么还没到账？"
+    ## 输出示例3
+        {
+        "Intent1":"订单号12345的物流查询？",
+        "Intent2":"订单号12345发货时间查询？",
+        "Intent3":"客户退款日期？",
+        "Intent4":"客户退款渠道？"
+        }
+    
+    ## 限制
+     - 必须按照规定的 JSON 格式输出，不要输出任何其他不相关内容
+     - 问题不要和材料本身相关
+     - 问题不得包含【报告、文章、文献、表格】中提到的这种话术，必须是一个自然的问题
+"""
+    message = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_input},
+    ]
     return message
