@@ -1,10 +1,10 @@
 import streamlit as st
 import os
-from openai import AsyncOpenAI
 import language_tool_python
 from pages.Functions.Constants import HIGHSPEED_MODEL_MAPPING
 from pages.Functions.Prompt import polishing_prompt, political_prompt, grammer_prompt
 from pages.Functions.DocSplit import split_tex_into_paragraphs, split_doc_into_paragraphs
+from pages.Functions.CallLLM import CallLLM
 import json
 import io
 from docx import Document
@@ -19,8 +19,7 @@ st.set_page_config(
 
 async def initialization():
     if "Client" not in st.session_state:
-        st.session_state.Client = AsyncOpenAI(api_key=os.environ.get('ZhiZz_API_KEY'),
-                                              base_url=os.environ.get('ZhiZz_URL'))
+        st.session_state.Client = CallLLM()
     if "uploaded_file" not in st.session_state:
         st.session_state.uploaded_file = None
     if "TEX_content" not in st.session_state:
@@ -74,34 +73,16 @@ async def initialization():
 async def polish_text_with_llm(message, temperature=0.6):
     try:
         st.subheader("润色结果")
-        content = ""
-        reasoning_content = ""
         model = st.session_state.get("selected_model", "deepseek-chat")
         with st.container(height=300):
             reason_placeholder = st.empty()
             message_placeholder = st.empty()
-            async for chunk in await st.session_state.Client.chat.completions.create(
-                    model=model,
-                    messages=message,
-                    temperature=temperature,
-                    stream=True
-            ):
-                if chunk.choices and len(chunk.choices) > 0:
-                    delta = chunk.choices[0].delta
-                    if getattr(delta, 'reasoning_content', None):
-                        reasoning_content += delta.reasoning_content
-                        reason_placeholder.markdown(
-                            f"<div style='background:#f0f0f0; border-radius:5px; padding:10px; margin-bottom:10px; font-size:14px;'>"
-                            f"🤔 {reasoning_content}</div>",
-                            unsafe_allow_html=True
-                        )
-                    if delta and delta.content is not None:
-                        content += delta.content
-                        message_placeholder.markdown(
-                            f"<div style='font-size:16px; margin-top:10px;'>{content}</div>",
-                            unsafe_allow_html=True
-                        )
-
+            model_parameter = {
+                "model": model,
+                "messages": message,
+                "temperature": temperature,
+            }
+            content = await st.session_state.Client.call(reason_placeholder, message_placeholder, True, **model_parameter)
         return content
     except Exception as e:
         st.error(f"调用大模型时出错: {str(e)}")
