@@ -305,7 +305,7 @@ class BackendInteractionLogic:
             "model": st.session_state.model,
             "messages": st.session_state.messages,
             "temperature": st.session_state.temperature,
-            "top_p": st.session_state.top_p,
+            "top_p": st.session_state.top_p if st.session_state.top_p else None,
             "presence_penalty": st.session_state.presence_penalty,
             "frequency_penalty": st.session_state.frequency_penalty,
             "max_tokens": st.session_state.max_tokens
