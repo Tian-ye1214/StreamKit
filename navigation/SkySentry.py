@@ -7,6 +7,7 @@ from openai import AsyncOpenAI
 import streamlit as st
 from pages.Functions.Constants import HIGHSPEED_MODEL_MAPPING
 from pages.Functions.Prompt import SkySentry_prompt
+from pages.Functions.CallLLM import CallLLM
 import asyncio
 
 
@@ -26,7 +27,7 @@ async def initialization():
     if "selected_model" not in st.session_state:
         st.session_state.selected_model = "deepseek-chat"
     if "Client" not in st.session_state:
-        st.session_state.Client = AsyncOpenAI(api_key=os.environ.get('ZhiZz_API_KEY'), base_url=os.environ.get('ZhiZz_URL'))
+        st.session_state.Client = CallLLM()
 
 
 class WeatherAlertCrawler:
@@ -252,30 +253,13 @@ class WeatherAlertNewsWriter:
         with st.spinner("正在生成回答..."):
             reason_placeholder = st.empty()
             message_placeholder = st.empty()
-            content = ""
-            reasoning_content = ""
-            async for chunk in await st.session_state.Client.chat.completions.create(
-                    model=st.session_state.selected_model,
-                    messages=messages,
-                    temperature=0.1,
-                    max_tokens=8192,
-                    stream=True
-            ):
-                if chunk.choices and len(chunk.choices) > 0:
-                    delta = chunk.choices[0].delta
-                    if getattr(delta, 'reasoning_content', None):
-                        reasoning_content += delta.reasoning_content
-                        reason_placeholder.markdown(
-                            f"<div style='background:#f0f0f0; border-radius:5px; padding:10px; margin-bottom:10px; font-size:14px;'>"
-                            f"🤔 {reasoning_content}</div>",
-                            unsafe_allow_html=True
-                        )
-                    if delta and delta.content is not None:
-                        content += delta.content
-                        message_placeholder.markdown(
-                            f"<div style='font-size:16px; margin-top:10px;'>{content}</div>",
-                            unsafe_allow_html=True
-                        )
+            model_parameter = {
+                "model": st.session_state.selected_model,
+                "messages": messages,
+                "temperature": 0.3,
+                "max_tokens": 8192
+            }
+            await st.session_state.Client.call(reason_placeholder, message_placeholder, True, **model_parameter)
 
 
 class WeatherAlertSystem(WeatherAlertCrawler):
