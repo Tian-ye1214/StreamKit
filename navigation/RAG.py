@@ -8,9 +8,8 @@ from pages.Functions.ExtractFileContents import extract_text
 from sklearn.metrics.pairwise import cosine_similarity
 from pages.Functions.UserLogManager import KnowledgeBaseManager
 from pages.Functions.Prompt import rag_prompt, IntentRecognition
-from openai import OpenAI
 from pages.Functions.Constants import HIGHSPEED_MODEL_MAPPING
-import os
+from pages.Functions.CallLLM import CallLLM
 import re
 import asyncio
 
@@ -217,7 +216,7 @@ async def initialization(rag_system):
     if "use_rerank" not in st.session_state:
         st.session_state.use_rerank = False
     if "Client" not in st.session_state:
-        st.session_state.Client = OpenAI(api_key=os.environ.get('ZhiZz_API_KEY'), base_url=os.environ.get('ZhiZz_URL'))
+        st.session_state.Client = CallLLM()
     if 'rag_text' not in st.session_state:
         st.session_state.rag_text = []
     if 'current_user' not in st.session_state:
@@ -312,14 +311,16 @@ async def rag_with_ai(rag_system):
         if st.session_state.intent:
             with st.spinner('意图识别中：'):
                 Intentmessage = IntentRecognition(user_input)
-                response = st.session_state.Client.chat.completions.create(
-                    model='deepseek-chat',
-                    messages=Intentmessage,
-                    temperature=0.6,
-                    max_tokens=8192,
-                )
-                st.markdown(f'识别到意图:{response.choices[0].message.content}')
-                user_intents = json.loads(response.choices[0].message.content)
+                reason_placeholder = st.empty()
+                message_placeholder = st.empty()
+                model_parameter = {
+                    "model": st.session_state.selected_model,
+                    "messages": Intentmessage,
+                    "temperature": 0.6,
+                    "max_tokens": 8192
+                }
+                response = await st.session_state.Client.call(reason_placeholder, message_placeholder, True, **model_parameter)
+                user_intents = json.loads(response)
             for user_intent in user_intents.values():
                 top_results.extend(await rag_system.retrieval(user_intent, st.session_state.tokenizer,
                                                               st.session_state.embed_model, knowledge_bases))
@@ -332,33 +333,13 @@ async def rag_with_ai(rag_system):
             try:
                 reason_placeholder = st.empty()
                 message_placeholder = st.empty()
-                content = ""
-                reasoning_content = ""
-
-                for chunk in st.session_state.Client.chat.completions.create(
-                        model=st.session_state.selected_model,
-                        messages=message,
-                        temperature=0.6,
-                        max_tokens=8192,
-                        stream=True
-                ):
-                    if chunk.choices and len(chunk.choices) > 0:
-                        delta = chunk.choices[0].delta
-                        if getattr(delta, 'reasoning_content', None):
-                            reasoning_content += delta.reasoning_content
-                            reason_placeholder.markdown(
-                                f"<div style='background:#f0f0f0; border-radius:5px; padding:10px; margin-bottom:10px; font-size:14px;'>"
-                                f"🤔 {reasoning_content}</div>",
-                                unsafe_allow_html=True
-                            )
-                        if delta and delta.content is not None:
-                            content += delta.content
-                            message_placeholder.markdown(
-                                f"<div style='font-size:16px; margin-top:10px;'>{content}</div>",
-                                unsafe_allow_html=True
-                            )
-
-                # 显示参考内容
+                model_parameter = {
+                    "model": st.session_state.selected_model,
+                    "messages": message,
+                    "temperature": 0.6,
+                    "max_tokens": 8192
+                }
+                await st.session_state.Client.call(reason_placeholder, message_placeholder, True, **model_parameter)
                 st.markdown("### 参考内容")
                 for i, result in enumerate(top_results, 1):
                     if st.session_state.use_rerank:
