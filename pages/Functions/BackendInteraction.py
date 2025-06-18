@@ -9,18 +9,14 @@ from pages.Functions.UserLogManager import UserLogManager
 from pages.Functions.ExtractFileContents import encode_image_to_base64
 from pages.Functions.WebSearch import WebSearch
 from pages.Functions.Constants import SEARCH_METHODS, MAX_TOKEN_LIMIT
-from pages.Functions.js.background import particles
-from openai import AsyncOpenAI
 import re
-import os
 from PIL import Image
 import tiktoken
+from pages.Functions.CallLLM import CallLLM
 
 
 class BackendInteractionLogic:
     def __init__(self):
-        # particles()
-        self.Placeholder = 'Hi, this is a placeholder'
         self.encoding = tiktoken.get_encoding("cl100k_base")
 
     def count_tokens(self, text):
@@ -44,15 +40,16 @@ class BackendInteractionLogic:
         """
         初始化各项参数，保存在session中
         """
-        if "openai_client" not in st.session_state:
-            st.session_state.openai_client = AsyncOpenAI(api_key=os.environ.get('ZhiZz_API_KEY'),
-                                                         base_url=os.environ.get('ZhiZz_URL'))
+        if "client" not in st.session_state:
+            st.session_state.Client = CallLLM()
         if "chat_messages" not in st.session_state:
             st.session_state.chat_messages = []
         if len(st.session_state.chat_messages) > 20:
             st.session_state.chat_messages = st.session_state.chat_messages[-20:]
         if "system_prompt" not in st.session_state:
-            st.session_state.system_prompt = "You are a helpful assistant."
+            st.session_state.system_prompt = (
+                "You are a helpful assistant.You should reply to users in markdown format."
+                "All mathematical formulas must be strictly enclosed between $...$")
         if "file_content" not in st.session_state:
             st.session_state.file_content = None
         if "current_user" not in st.session_state:
@@ -200,7 +197,7 @@ class BackendInteractionLogic:
                                                               help="生成文本的最大长度")
 
             with col2:
-                st.session_state.top_p = st.slider("Top P", 0.0, 1.0, 0.9, 0.1,
+                st.session_state.top_p = st.slider("Top P", 0.0, 1.0, 0.0, 0.1,
                                                    help="控制词汇选择的多样性,值越高表示潜在生成词汇越多样")
                 st.session_state.frequency_penalty = st.slider("Frequency Penalty", -2.0, 2.0, 0.0, 0.1,
                                                                help="控制回复中相同词汇重复性，值越高重复性越低")
@@ -288,8 +285,9 @@ class BackendInteractionLogic:
         st.session_state.messages.extend([{"role": m["role"], "content": m["content"]}
                                           for m in st.session_state.chat_messages])
         st.session_state.chat_messages.append(st.session_state.current_prompt)
-        base64_image = await encode_image_to_base64(st.session_state.uploaded_image) if st.session_state.get("uploaded_image",
-                                                                                                       None) else None
+        base64_image = await encode_image_to_base64(st.session_state.uploaded_image) if st.session_state.get(
+            "uploaded_image",
+            None) else None
         if base64_image and sections == '视觉对话':
             st.session_state.messages.append({
                 "role": "user",
@@ -301,82 +299,18 @@ class BackendInteractionLogic:
         else:
             st.session_state.messages.append({"role": "user", "content": st.session_state.prompt})
 
-        if st.session_state.stream:
-            reason_placeholder = st.empty()
-            message_placeholder = st.empty()
-            content = ""
-            reasoning_content = ""
-
-            async for chunk in await st.session_state.openai_client.chat.completions.create(
-                    model=st.session_state.model,
-                    messages=st.session_state.messages,
-                    temperature=st.session_state.temperature,
-                    top_p=st.session_state.top_p,
-                    presence_penalty=st.session_state.presence_penalty,
-                    frequency_penalty=st.session_state.frequency_penalty,
-                    max_tokens=st.session_state.max_tokens,
-                    stream=True
-            ):
-                if chunk.choices and len(chunk.choices) > 0:
-                    delta = chunk.choices[0].delta
-                    if getattr(delta, 'reasoning_content', None):
-                        reasoning_content += delta.reasoning_content
-                        reason_placeholder.markdown(
-                            f"<div style='background:#f0f0f0; border-radius:5px; padding:10px; margin-bottom:10px; font-size:14px;'>"
-                            f"🤔 {reasoning_content}</div>",
-                            unsafe_allow_html=True
-                        )
-                    if delta and delta.content is not None:
-                        content += delta.content
-                        message_placeholder.markdown(
-                            f"<div style='font-size:16px; margin-top:10px;'>{content}</div>",
-                            unsafe_allow_html=True
-                        )
-            assistant_response = content
-
-        else:
-            response = await st.session_state.openai_client.chat.completions.create(
-                model=st.session_state.model,
-                messages=st.session_state.messages,
-                temperature=st.session_state.temperature,
-                top_p=st.session_state.top_p,
-                presence_penalty=st.session_state.presence_penalty,
-                frequency_penalty=st.session_state.frequency_penalty,
-                max_tokens=st.session_state.max_tokens,
-                stream=False
-            )
-            reasoning_content = getattr(response.choices[0].message, 'reasoning_content', None)
-            assistant_response = response.choices[0].message.content
-
-            if reasoning_content:
-                st.markdown(
-                    f"<div style='background:#f0f0f0; border-radius:5px; padding:10px; margin-bottom:10px; font-size:14px;'>"
-                    f"🤔 {reasoning_content}</div>",
-                    unsafe_allow_html=True
-                )
-            st.markdown(assistant_response)
-
-        copy_script = f"""
-            <div id="copy-container-{id(assistant_response)}" style="display:inline;">
-                <button onclick="copyToClipboard{id(assistant_response)}()" 
-                        style="margin-left:10px; background:#f0f0f0; border:none; border-radius:3px; padding:2px 8px;"
-                        title="复制内容">
-                    📋
-                </button>
-                <div id="copy-content-{id(assistant_response)}" style="display:none; white-space: pre-wrap;">{assistant_response.lstrip()}</div>
-            </div>
-            <script>
-                function copyToClipboard{id(assistant_response)}() {{
-                    const content = document.getElementById('copy-content-{id(assistant_response)}').innerText;
-                    navigator.clipboard.writeText(content);
-                    const btn = event.target;
-                    btn.innerHTML = '✅';
-                    setTimeout(() => {{ btn.innerHTML = '📋'; }}, 500);
-                }}
-            </script>
-            """
-        st.components.v1.html(copy_script, height=30)
-
+        reason_placeholder = st.empty()
+        message_placeholder = st.empty()
+        model_parameter = {
+            "model": st.session_state.model,
+            "messages": st.session_state.messages,
+            "temperature": st.session_state.temperature,
+            "top_p": st.session_state.top_p,
+            "presence_penalty": st.session_state.presence_penalty,
+            "frequency_penalty": st.session_state.frequency_penalty,
+            "max_tokens": st.session_state.max_tokens
+        }
+        assistant_response = await st.session_state.Client.call(reason_placeholder, message_placeholder, st.session_state.stream, **model_parameter)
         input_tokens = sum(self.count_message_tokens(msg) for msg in st.session_state.messages)
         output_tokens = self.count_tokens(assistant_response)
         st.session_state.total_tokens = input_tokens + output_tokens
@@ -387,7 +321,8 @@ class BackendInteractionLogic:
         </div>
            """, unsafe_allow_html=True)
 
-        if round(0.75 * MAX_TOKEN_LIMIT[st.session_state.model]) <= st.session_state.total_tokens < MAX_TOKEN_LIMIT[st.session_state.model]:
+        if round(0.75 * MAX_TOKEN_LIMIT[st.session_state.model]) <= st.session_state.total_tokens < MAX_TOKEN_LIMIT[
+            st.session_state.model]:
             st.warning(f"当前 {st.session_state.total_tokens} 个token将要超出模型限制。请减少输入的长度或调整模型。")
         elif st.session_state.total_tokens >= round(MAX_TOKEN_LIMIT[st.session_state.model]):
             st.error(f"当前 {st.session_state.total_tokens} 个token已经超出模型限制。请开启新的对话。")
