@@ -4,7 +4,7 @@ load_dotenv()
 
 pages = {
     "🏠 导航页": [
-        st.Page("navigation/Home.py", title="未来AI界面设想", icon="🚀", default=True),
+        st.Page("navigation/Home.py", title="导航页", icon="🚀", default=True),
     ],
     "💬 AI交互平台": [
         st.Page("navigation/Chat.py", title="AI对话平台", icon="💬"),
