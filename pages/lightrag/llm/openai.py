@@ -71,7 +71,7 @@ def create_openai_async_client(
         api_key = os.environ["OPENAI_API_KEY"]
 
     default_headers = {
-        "User-Agent": f"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_8) LightRAG/1.3.6",
+        "User-Agent": f"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_8) LightRAG/0017",
         "Content-Type": "application/json",
     }
 
@@ -176,6 +176,7 @@ async def openai_complete_if_cache(
     logger.debug("===== Sending Query to LLM =====")
 
     try:
+        # Don't use async with context manager, use client directly
         if "response_format" in kwargs:
             response = await openai_async_client.beta.chat.completions.parse(
                 model=model, messages=messages, **kwargs
@@ -186,17 +187,21 @@ async def openai_complete_if_cache(
             )
     except APIConnectionError as e:
         logger.error(f"OpenAI API Connection Error: {e}")
+        await openai_async_client.close()  # Ensure client is closed
         raise
     except RateLimitError as e:
         logger.error(f"OpenAI API Rate Limit Error: {e}")
+        await openai_async_client.close()  # Ensure client is closed
         raise
     except APITimeoutError as e:
         logger.error(f"OpenAI API Timeout Error: {e}")
+        await openai_async_client.close()  # Ensure client is closed
         raise
     except Exception as e:
         logger.error(
             f"OpenAI API Call Failed,\nModel: {model},\nParams: {kwargs}, Got: {e}"
         )
+        await openai_async_client.close()  # Ensure client is closed
         raise
 
     if hasattr(response, "__aiter__"):
@@ -241,6 +246,8 @@ async def openai_complete_if_cache(
                         logger.warning(
                             f"Failed to close stream response: {close_error}"
                         )
+                # Ensure client is closed in case of exception
+                await openai_async_client.close()
                 raise
             finally:
                 # Ensure resources are released even if no exception occurs
@@ -257,39 +264,58 @@ async def openai_complete_if_cache(
                             f"Failed to close stream response in finally block: {close_error}"
                         )
 
+                # This prevents resource leaks since the caller doesn't handle closing
+                try:
+                    await openai_async_client.close()
+                    logger.debug(
+                        "Successfully closed OpenAI client for streaming response"
+                    )
+                except Exception as client_close_error:
+                    logger.warning(
+                        f"Failed to close OpenAI client in streaming finally block: {client_close_error}"
+                    )
+
         return inner()
 
     else:
-        if (
-            not response
-            or not response.choices
-            or not hasattr(response.choices[0], "message")
-            or not hasattr(response.choices[0].message, "content")
-        ):
-            logger.error("Invalid response from OpenAI API")
-            raise InvalidResponseError("Invalid response from OpenAI API")
+        try:
+            if (
+                not response
+                or not response.choices
+                or not hasattr(response.choices[0], "message")
+                or not hasattr(response.choices[0].message, "content")
+            ):
+                logger.error("Invalid response from OpenAI API")
+                await openai_async_client.close()  # Ensure client is closed
+                raise InvalidResponseError("Invalid response from OpenAI API")
 
-        content = response.choices[0].message.content
+            content = response.choices[0].message.content
 
-        if not content or content.strip() == "":
-            logger.error("Received empty content from OpenAI API")
-            raise InvalidResponseError("Received empty content from OpenAI API")
+            if not content or content.strip() == "":
+                logger.error("Received empty content from OpenAI API")
+                await openai_async_client.close()  # Ensure client is closed
+                raise InvalidResponseError("Received empty content from OpenAI API")
 
-        if r"\u" in content:
-            content = safe_unicode_decode(content.encode("utf-8"))
+            if r"\u" in content:
+                content = safe_unicode_decode(content.encode("utf-8"))
 
-        if token_tracker and hasattr(response, "usage"):
-            token_counts = {
-                "prompt_tokens": getattr(response.usage, "prompt_tokens", 0),
-                "completion_tokens": getattr(response.usage, "completion_tokens", 0),
-                "total_tokens": getattr(response.usage, "total_tokens", 0),
-            }
-            token_tracker.add_usage(token_counts)
+            if token_tracker and hasattr(response, "usage"):
+                token_counts = {
+                    "prompt_tokens": getattr(response.usage, "prompt_tokens", 0),
+                    "completion_tokens": getattr(
+                        response.usage, "completion_tokens", 0
+                    ),
+                    "total_tokens": getattr(response.usage, "total_tokens", 0),
+                }
+                token_tracker.add_usage(token_counts)
 
-        logger.debug(f"Response content len: {len(content)}")
-        verbose_debug(f"Response: {response}")
+            logger.debug(f"Response content len: {len(content)}")
+            verbose_debug(f"Response: {response}")
 
-        return content
+            return content
+        finally:
+            # Ensure client is closed in all cases for non-streaming responses
+            await openai_async_client.close()
 
 
 async def openai_complete(
@@ -420,7 +446,8 @@ async def openai_embed(
         api_key=api_key, base_url=base_url, client_configs=client_configs
     )
 
-    response = await openai_async_client.embeddings.create(
-        model=model, input=texts, encoding_format="float"
-    )
-    return np.array([dp.embedding for dp in response.data])
+    async with openai_async_client:
+        response = await openai_async_client.embeddings.create(
+            model=model, input=texts, encoding_format="float"
+        )
+        return np.array([dp.embedding for dp in response.data])
