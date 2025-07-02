@@ -15,7 +15,6 @@ from pages.lightrag import LightRAG, QueryParam
 from pages.lightrag.utils import EmbeddingFunc, logger, set_verbose_debug
 from pages.lightrag.kg.shared_storage import initialize_pipeline_status
 
-# 创建全局事件循环
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
 
@@ -132,7 +131,7 @@ async def init_rag(filename=None):
         working_dir=working_dir,
         llm_model_func=llm_model_func,
         embedding_func=EmbeddingFunc(
-            embedding_dim=1024,
+            embedding_dim=4096 if st.session_state.embedding_model == 'Qwen/Qwen3-Embedding-8B' else 1024,
             max_token_size=8192,
             func=embedding_func),
         addon_params={"language": "Simplified Chinese"},
@@ -144,7 +143,6 @@ async def init_rag(filename=None):
     return rag
 
 
-@st.cache_data
 def load_knowledge_graph(graph_path, show_isolated=False):
     """加载并缓存知识图谱数据"""
     if not os.path.exists(graph_path):
@@ -171,7 +169,6 @@ def load_knowledge_graph(graph_path, show_isolated=False):
         temp_path = os.path.join(temp_dir, f'graph_{random.randint(0, 999999)}.html')
         net.show(temp_path)
         html_content = _load_temp_graph(temp_path)
-
         return html_content
     except Exception as e:
         st.warning(f"知识图谱显示失败: {str(e)}")
@@ -230,7 +227,6 @@ def _load_temp_graph(temp_path):
     return html_content.replace('</body>', custom_js + '</body>')
 
 
-@st.cache_data
 def display_knowledge_graph(working_dir, show_isolated=False):
     """显示知识图谱"""
     graph_path = os.path.join(working_dir, 'graph_chunk_entity_relation.graphml')

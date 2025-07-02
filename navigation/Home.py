@@ -1,9 +1,8 @@
 import streamlit as st
-import time
 
 # 页面配置
 st.set_page_config(
-    page_title="MyWebProject - 未来AI界面设想",
+    page_title="StreamKit -- AI Nexus",
     page_icon="🚀",
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -99,29 +98,11 @@ def load_css():
     .platform { border-left: 4px solid #58a6ff; }
     .platform .card-icon { color: #58a6ff; }
     
-    .visual-centric { border-left: 4px solid #a5a3ff; }
-    .visual-centric .card-icon { color: #a5a3ff; }
-    
-    .generative { border-left: 4px solid #f9d71c; }
-    .generative .card-icon { color: #f9d71c; }
-    
-    .programmatic { border-left: 4px solid #56d4dd; }
-    .programmatic .card-icon { color: #56d4dd; }
-    
-    .fluid-canvas { border-left: 4px solid #f47067; }
-    .fluid-canvas .card-icon { color: #f47067; }
-    
-    .early-stages { border-left: 4px solid #57ab5a; }
-    .early-stages .card-icon { color: #57ab5a; }
-    
     .dify-section { border-left: 4px solid #bc8cff; }
     .dify-section .card-icon { color: #bc8cff; }
     
     .tools-section { border-left: 4px solid #ff7b72; }
     .tools-section .card-icon { color: #ff7b72; }
-    
-    .ultimate-trend { border-left: 4px solid #f0883e; }
-    .ultimate-trend .card-icon { color: #f0883e; }
     
     /* 进度条 */
     .progress-bar {
