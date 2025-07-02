@@ -252,14 +252,14 @@ class BackendInteractionLogic:
                                                                       help="设置最大返回的搜索结果数量")
 
     async def get_system_prompt(self):
-        if st.session_state.file_content and st.session_state.search_result:
+        if st.session_state.file_content and st.session_state.search_result and st.session_state.search_mode in SEARCH_METHODS:
             return generate_combined_prompt(
                 st.session_state.file_content,
                 st.session_state.search_result
             )
         if st.session_state.file_content:
             return generate_document_prompt(st.session_state.file_content)
-        if st.session_state.search_result:
+        if st.session_state.search_result and st.session_state.search_mode in SEARCH_METHODS:
             return generate_search_prompt(st.session_state.search_result)
         return st.session_state.system_prompt
 
@@ -270,7 +270,6 @@ class BackendInteractionLogic:
                 method = getattr(search, SEARCH_METHODS[st.session_state.search_mode])
                 st.session_state.search_result = method()
 
-                # 显示搜索结果
                 with st.chat_message("assistant"):
                     st.markdown("🔍 搜索到以下相关信息：")
                     for i, result in enumerate(st.session_state.search_result):
@@ -311,16 +310,15 @@ class BackendInteractionLogic:
             "max_tokens": st.session_state.max_tokens
         }
         assistant_response = await st.session_state.Client.call(reason_placeholder, message_placeholder, st.session_state.stream, **model_parameter)
+
         input_tokens = sum(self.count_message_tokens(msg) for msg in st.session_state.messages)
         output_tokens = self.count_tokens(assistant_response)
         st.session_state.total_tokens = input_tokens + output_tokens
-
         st.session_state.token_counter.markdown(f"""
            <div style='text-align: center; margin: 10px 0; font-size:14px;'>
                当前Token数：<span style='color: #4b4bff; font-weight:bold;'>{st.session_state.total_tokens}</span>
         </div>
            """, unsafe_allow_html=True)
-
         if round(0.75 * MAX_TOKEN_LIMIT[st.session_state.model]) <= st.session_state.total_tokens < MAX_TOKEN_LIMIT[
             st.session_state.model]:
             st.warning(f"当前 {st.session_state.total_tokens} 个token将要超出模型限制。请减少输入的长度或调整模型。")

@@ -1,6 +1,7 @@
 import streamlit as st
 from openai import AsyncOpenAI
 import os
+import json
 
 
 class CallLLM:
@@ -48,25 +49,40 @@ class CallLLM:
                 )
             message_placeholder.markdown(assistant_response)
 
+        js_escaped_conversation = json.dumps(f"assistant: {assistant_response}")
         copy_script = f"""
-            <div id="copy-container-{id(assistant_response)}" style="display:inline;">
-                <button onclick="copyToClipboard{id(assistant_response)}()" 
-                        style="margin-left:10px; background:#f0f0f0; border:none; border-radius:3px; padding:2px 8px;"
-                        title="复制内容">
-                    📋
-                </button>
-                <div id="copy-content-{id(assistant_response)}" style="display:none; white-space: pre-wrap;">{assistant_response.lstrip()}</div>
-            </div>
-            <script>
-                function copyToClipboard{id(assistant_response)}() {{
-                    const content = document.getElementById('copy-content-{id(assistant_response)}').innerText;
-                    navigator.clipboard.writeText(content);
-                    const btn = event.target;
-                    btn.innerHTML = '✅';
-                    setTimeout(() => {{ btn.innerHTML = '📋'; }}, 500);
-                }}
-            </script>
-            """
-        st.components.v1.html(copy_script, height=30)
+<style>
+    .copy-btn {{
+        border: 1px solid #ccc;
+        background-color: #f0f0f0;
+        padding: 5px 10px;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 14px;
+    }}
+    .copy-btn:hover {{
+        background-color: #e0e0e0;
+    }}
+</style>
+<button class="copy-btn" id="copy-btn-unique" onclick="copyToClipboard()">复制当前对话</button>
+<span id="copy-message-unique" style="margin-left: 10px; color: green; visibility: hidden;">复制成功</span>
+
+<script>
+function copyToClipboard() {{
+    const textToCopy = {js_escaped_conversation};
+    navigator.clipboard.writeText(textToCopy).then(function() {{
+        var copyMessage = document.getElementById('copy-message-unique');
+        copyMessage.style.visibility = 'visible';
+        setTimeout(function() {{
+            copyMessage.style.visibility = 'hidden';
+        }}, 2000);
+    }}, function(err) {{
+        console.error('复制失败: ', err);
+        alert('复制失败');
+    }});
+}}
+</script>
+"""
+        st.components.v1.html(copy_script, height=50)
 
         return assistant_response
