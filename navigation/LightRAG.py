@@ -406,6 +406,8 @@ async def main():
 
                 except Exception as outer_e:
                     st.error(f"处理过程发生错误: {str(outer_e)}")
+                finally:
+                    await st.session_state.rag.finalize_storages()
 
     with col2:
         st.subheader("📊 知识图谱")
