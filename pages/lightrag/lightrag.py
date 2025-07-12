@@ -143,11 +143,11 @@ class LightRAG:
     # Text chunking
     # ---
 
-    chunk_token_size: int = field(default=int(os.getenv("CHUNK_SIZE", 2048)))
+    chunk_token_size: int = field(default=int(os.getenv("CHUNK_SIZE", 4096)))
     """Maximum number of tokens per text chunk when splitting documents."""
 
     chunk_overlap_token_size: int = field(
-        default=int(os.getenv("CHUNK_OVERLAP_SIZE", 128))
+        default=int(os.getenv("CHUNK_OVERLAP_SIZE", 256))
     )
     """Number of overlapping tokens between consecutive text chunks to preserve context."""
 
