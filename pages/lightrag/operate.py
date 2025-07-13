@@ -1904,6 +1904,8 @@ async def _build_query_context(
     logger.info(
         f"Final context: {len(entities_context)} entities, {len(relations_context)} relations, {len(text_units_context)} chunks"
     )
+    st.session_state.current_query_nodes.extend(entities_context)
+    st.session_state.current_query_edges.extend(relations_context)
 
     # not necessary to use LLM to generate a response
     if not entities_context and not relations_context:
@@ -1946,6 +1948,7 @@ async def _get_node_data(
     logger.info(
         f"Query nodes: {query}, top_k: {query_param.top_k}, cosine: {entities_vdb.cosine_better_than_threshold}"
     )
+    st.markdown(f"查询节点: {query}")
 
     results = await entities_vdb.query(
         query, top_k=query_param.top_k, ids=query_param.ids
@@ -2054,7 +2057,6 @@ async def _get_node_data(
                 "file_path": file_path,
             }
         )
-
     return entities_context, relations_context, use_text_units
 
 
@@ -2238,6 +2240,7 @@ async def _get_edge_data(
     logger.info(
         f"Query edges: {keywords}, top_k: {query_param.top_k}, cosine: {relationships_vdb.cosine_better_than_threshold}"
     )
+    st.markdown(f"查询关系: {keywords}")
 
     results = await relationships_vdb.query(
         keywords, top_k=query_param.top_k, ids=query_param.ids
