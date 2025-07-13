@@ -1423,6 +1423,53 @@ def lazy_external_import(module_name: str, class_name: str) -> Callable[..., Any
     return import_class
 
 
+async def update_chunk_cache_list(
+    chunk_id: str,
+    text_chunks_storage: "BaseKVStorage",
+    cache_keys: list[str],
+    cache_scenario: str = "batch_update",
+) -> None:
+    """Update chunk's llm_cache_list with the given cache keys
+
+    Args:
+        chunk_id: Chunk identifier
+        text_chunks_storage: Text chunks storage instance
+        cache_keys: List of cache keys to add to the list
+        cache_scenario: Description of the cache scenario for logging
+    """
+    if not cache_keys:
+        return
+
+    try:
+        chunk_data = await text_chunks_storage.get_by_id(chunk_id)
+        if chunk_data:
+            # Ensure llm_cache_list exists
+            if "llm_cache_list" not in chunk_data:
+                chunk_data["llm_cache_list"] = []
+
+            # Add cache keys to the list if not already present
+            existing_keys = set(chunk_data["llm_cache_list"])
+            new_keys = [key for key in cache_keys if key not in existing_keys]
+
+            if new_keys:
+                chunk_data["llm_cache_list"].extend(new_keys)
+
+                # Update the chunk in storage
+                await text_chunks_storage.upsert({chunk_id: chunk_data})
+                logger.debug(
+                    f"Updated chunk {chunk_id} with {len(new_keys)} cache keys ({cache_scenario})"
+                )
+    except Exception as e:
+        logger.warning(
+            f"Failed to update chunk {chunk_id} with cache references on {cache_scenario}: {e}"
+        )
+
+
+def remove_think_tags(text: str) -> str:
+    """Remove <think> tags from the text"""
+    return re.sub(r"^(<think>.*?</think>|<think>)", "", text, flags=re.DOTALL).strip()
+
+
 async def use_llm_func_with_cache(
     input_text: str,
     use_llm_func: callable,
@@ -1431,6 +1478,7 @@ async def use_llm_func_with_cache(
     history_messages: list[dict[str, str]] = None,
     cache_type: str = "extract",
     chunk_id: str | None = None,
+    cache_keys_collector: list = None,
 ) -> str:
     """Call LLM function with cache support
 
@@ -1445,6 +1493,8 @@ async def use_llm_func_with_cache(
         history_messages: History messages list
         cache_type: Type of cache
         chunk_id: Chunk identifier to store in cache
+        text_chunks_storage: Text chunks storage to update llm_cache_list
+        cache_keys_collector: Optional list to collect cache keys for batch processing
 
     Returns:
         LLM response text
@@ -1457,6 +1507,9 @@ async def use_llm_func_with_cache(
             _prompt = input_text
 
         arg_hash = compute_args_hash(_prompt)
+        # Generate cache key for this LLM call
+        cache_key = generate_cache_key("default", cache_type, arg_hash)
+
         cached_return, _1, _2, _3 = await handle_cache(
             llm_response_cache,
             arg_hash,
@@ -1467,6 +1520,11 @@ async def use_llm_func_with_cache(
         if cached_return:
             logger.debug(f"Found cache for {arg_hash}")
             statistic_data["llm_cache"] += 1
+
+            # Add cache key to collector if provided
+            if cache_keys_collector is not None:
+                cache_keys_collector.append(cache_key)
+
             return cached_return
         statistic_data["llm_call"] += 1
 
@@ -1478,6 +1536,7 @@ async def use_llm_func_with_cache(
             kwargs["max_tokens"] = max_tokens
 
         res: str = await use_llm_func(input_text, **kwargs)
+        res = remove_think_tags(res)
 
         if llm_response_cache.global_config.get("enable_llm_cache_for_entity_extract"):
             await save_to_cache(
@@ -1491,6 +1550,10 @@ async def use_llm_func_with_cache(
                 ),
             )
 
+            # Add cache key to collector if provided
+            if cache_keys_collector is not None:
+                cache_keys_collector.append(cache_key)
+
         return res
 
     # When cache is disabled, directly call LLM
@@ -1500,8 +1563,9 @@ async def use_llm_func_with_cache(
     if max_tokens is not None:
         kwargs["max_tokens"] = max_tokens
 
-    logger.info(f"Call LLM function with query text lenght: {len(input_text)}")
-    return await use_llm_func(input_text, **kwargs)
+    logger.info(f"Call LLM function with query text length: {len(input_text)}")
+    res = await use_llm_func(input_text, **kwargs)
+    return remove_think_tags(res)
 
 
 def get_content_summary(content: str, max_length: int = 250) -> str:
