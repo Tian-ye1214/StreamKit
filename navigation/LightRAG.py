@@ -84,9 +84,10 @@ def configure_logging():
     set_verbose_debug(os.getenv("VERBOSE_DEBUG", "false").lower() == "true")
 
 
-async def llm_model_func(prompt, system_prompt=None, history_messages=[], **kwargs) -> str:
+async def llm_model_func(prompt, system_prompt=None, history_messages=[], **kwargs):
+    llm_model = st.session_state.get('llm_model')
     return await openai_complete_if_cache(
-        st.session_state.llm_model,
+        llm_model,
         prompt,
         system_prompt=system_prompt,
         history_messages=history_messages,
@@ -97,9 +98,10 @@ async def llm_model_func(prompt, system_prompt=None, history_messages=[], **kwar
 
 
 async def embedding_func(texts: list[str]):
+    embedding_model = st.session_state.get('embedding_model')
     return await openai_embed(
         texts,
-        model=st.session_state.embedding_model,
+        model=embedding_model,
         api_key=os.environ.get('SiliconFlow_API_KEY'),
         base_url=os.environ.get('SiliconFlow_URL'),
     )
@@ -131,7 +133,7 @@ async def init_rag(filename=None):
         working_dir=working_dir,
         llm_model_func=llm_model_func,
         embedding_func=EmbeddingFunc(
-            embedding_dim=4096 if st.session_state.embedding_model == 'Qwen/Qwen3-Embedding-8B' else 1024,
+            embedding_dim=4096 if st.session_state.get('embedding_model') == 'Qwen/Qwen3-Embedding-8B' else 1024,
             max_token_size=8192,
             func=embedding_func),
         addon_params={"language": "Simplified Chinese"},
@@ -266,7 +268,24 @@ async def _process_uploaded_file(uploaded_file):
                     st.session_state.has_document = False
 
 
+async def print_stream(stream, placeholder):
+    content = ''
+    async for chunk in stream:
+        if chunk:
+            content += chunk
+            placeholder.markdown(content)
+    return content
+
+
+def initialize():
+    if "llm_model" not in st.session_state:
+        st.session_state.llm_model = 'deepseek-chat'
+    if "embedding_model" not in st.session_state:
+        st.session_state.embedding_model = 'Qwen/Qwen3-Embedding-8B'
+
+
 async def main():
+    initialize()
     st.title("LightRAG - 基于知识图谱的检索增强生成系统")
     with st.expander("使用说明", expanded=False):
         st.markdown("""
@@ -318,16 +337,9 @@ async def main():
                                          help="选择用于文本向量化的模型",
                                          key="embed_model_select")
 
-        new_llm_model = HIGHSPEED_MODEL_MAPPING[model_display]
-        new_embedding_model = EMBEDDING_MODEL_MAPPING[emb_model_display]
+        st.session_state.llm_model = HIGHSPEED_MODEL_MAPPING[model_display]
+        st.session_state.embedding_model = EMBEDDING_MODEL_MAPPING[emb_model_display]
 
-        if (new_llm_model != st.session_state.get("llm_model") or
-                new_embedding_model != st.session_state.get("embedding_model")):
-            st.session_state.llm_model = new_llm_model
-            st.session_state.embedding_model = new_embedding_model
-            if "rag" in st.session_state and st.session_state.has_document:
-                st.session_state.rag = await init_rag(st.session_state.current_file)
-                st.info("更改模型成功！")
         st.subheader("🔍 查询模式")
         query_mode = st.selectbox(
             "选择查询模式",
@@ -351,7 +363,7 @@ async def main():
                 help="选择AI回答的格式样式",
                 key="response_type_select"
             )
-            top_k = st.slider("检索数量(top_k)", min_value=10, max_value=100, value=60,
+            top_k = st.slider("检索数量(top_k)", min_value=1, max_value=120, value=60,
                               help="在local模式下表示检索的实体数量，在global模式下表示检索的关系数量")
             max_token_for_text_unit = st.slider("文本单元最大token数", min_value=1000, max_value=8000, value=4000,
                                                 help="原始文本块的最大token数量")
@@ -396,16 +408,16 @@ async def main():
                             max_token_for_text_unit=max_token_for_text_unit,
                             max_token_for_global_context=max_token_for_global_context,
                             max_token_for_local_context=max_token_for_local_context,
+                            conversation_history=st.session_state.rag_messages,
+                            stream=True
                         )
                     )
-                    st.markdown(assistant_response)
-                    st.session_state.rag_messages.append({"role": "assistant", "content": assistant_response})
-
-                    if len(st.session_state.rag_messages) > 20:
-                        st.session_state.rag_messages = st.session_state.rag_messages[-20:]
+                    placeholder = st.empty()
+                    content = await print_stream(assistant_response, placeholder)
+                    st.session_state.rag_messages.append({"role": "assistant", "content": content})
 
                 except Exception as outer_e:
-                    st.error(f"处理过程发生错误: {str(outer_e)}")
+                    st.error(f"问答过程发生错误: {str(outer_e)}")
                 finally:
                     await st.session_state.rag.finalize_storages()
 
