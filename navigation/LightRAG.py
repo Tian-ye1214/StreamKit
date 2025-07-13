@@ -18,6 +18,12 @@ from pages.lightrag.kg.shared_storage import initialize_pipeline_status
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
 
+st.set_page_config(
+    page_title="知识图谱检索",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
 
 def configure_logging():
     """Configure logging for the application"""
@@ -145,42 +151,25 @@ async def init_rag(filename=None):
     return rag
 
 
-def load_knowledge_graph(graph_path, show_isolated=False):
-    """加载并缓存知识图谱数据"""
-    if not os.path.exists(graph_path):
-        return None
+def process_grpah(G):
+    net = Network(height="100vh", notebook=True, directed=False)
+    net.from_nx(G)
+    for node in net.nodes:
+        node["color"] = "#{:06x}".format(random.randint(0, 0xFFFFFF))
+        if "description" in node:
+            node["title"] = node["description"]
 
-    try:
-        G = nx.read_graphml(graph_path)
-        if not show_isolated:
-            G.remove_nodes_from(list(nx.isolates(G)))
+    for edge in net.edges:
+        if "description" in edge:
+            edge["title"] = edge["description"]
+        edge["width"] = 2
 
-        net = Network(height="100vh", notebook=True, directed=False)
-        net.from_nx(G)
-        for node in net.nodes:
-            node["color"] = "#{:06x}".format(random.randint(0, 0xFFFFFF))
-            if "description" in node:
-                node["title"] = node["description"]
-
-        for edge in net.edges:
-            if "description" in edge:
-                edge["title"] = edge["description"]
-            edge["width"] = 2
-
-        temp_dir = tempfile.gettempdir()
-        temp_path = os.path.join(temp_dir, f'graph_{random.randint(0, 999999)}.html')
-        net.show(temp_path)
-        html_content = _load_temp_graph(temp_path)
-        return html_content
-    except Exception as e:
-        st.warning(f"知识图谱显示失败: {str(e)}")
-        return None
-
-
-def _load_temp_graph(temp_path):
+    st.info(f"📊 图谱统计: {len(G.nodes)} 个节点, {len(G.edges)} 个关系")
+    temp_dir = tempfile.gettempdir()
+    temp_path = os.path.join(temp_dir, f'graph_{random.randint(0, 999999)}.html')
+    net.show(temp_path)
     with open(temp_path, 'r', encoding='utf-8') as f:
         html_content = f.read()
-
     custom_js = """
     <script>
     // 等待网络图加载完成
@@ -226,13 +215,28 @@ def _load_temp_graph(temp_path):
     });
     </script>
     """
-    return html_content.replace('</body>', custom_js + '</body>')
+    html_content = html_content.replace('</body>', custom_js + '</body>')
+    try:
+        os.remove(temp_path)
+    except Exception as e:
+        pass
+    return html_content
 
 
 def display_knowledge_graph(working_dir, show_isolated=False):
     """显示知识图谱"""
     graph_path = os.path.join(working_dir, 'graph_chunk_entity_relation.graphml')
-    html_content = load_knowledge_graph(graph_path, show_isolated)
+    if not os.path.exists(graph_path):
+        return None
+    try:
+        G = nx.read_graphml(graph_path)
+        if not show_isolated:
+            G.remove_nodes_from(list(nx.isolates(G)))
+        html_content = process_grpah(G)
+
+    except Exception as e:
+        st.warning(f"知识图谱显示失败: {str(e)}")
+        html_content = None
 
     if html_content:
         with st.expander("知识图谱说明"):
@@ -282,6 +286,69 @@ def initialize():
         st.session_state.llm_model = 'deepseek-chat'
     if "embedding_model" not in st.session_state:
         st.session_state.embedding_model = 'Qwen/Qwen3-Embedding-8B'
+    if "rag_messages" not in st.session_state:
+        st.session_state.rag_messages = []
+    if 'has_document' not in st.session_state:
+        st.session_state.has_document = False
+    if 'current_query_nodes' not in st.session_state:
+        st.session_state.current_query_nodes = []
+    if 'current_query_edges' not in st.session_state:
+        st.session_state.current_query_edges = []
+
+
+def create_current_query_subgraph():
+    """创建当前查询的子图谱并展示"""
+    st.subheader("🔍 当前查询图谱")
+    if not st.session_state.current_query_nodes and not st.session_state.current_query_edges:
+        st.info("暂无查询图谱数据，请先进行查询")
+        return
+    
+    try:
+        G = nx.Graph()
+        if st.session_state.current_query_nodes:
+            for node_data in st.session_state.current_query_nodes:
+                G.add_node(
+                    str(node_data["id"]),
+                    label=node_data["entity"],
+                    entity_type=node_data["type"],
+                    description=node_data["description"],
+                    rank=node_data["rank"],
+                    created_at=node_data["created_at"],
+                    file_path=node_data["file_path"]
+                )
+
+        if st.session_state.current_query_edges:
+            for edge_data in st.session_state.current_query_edges:
+                edge_id = str(edge_data["id"])
+                entity1_id = str(edge_data["entity1"])
+                entity2_id = str(edge_data["entity2"])
+                # if entity1_id not in G.nodes:
+                #     G.add_node(entity1_id, label=f"{entity1_id}")
+                # if entity2_id not in G.nodes:
+                #     G.add_node(entity2_id, label=f"{entity2_id}")
+                
+                G.add_edge(
+                    entity1_id,
+                    entity2_id,
+                    id=edge_id,
+                    description=edge_data["description"],
+                    keywords=edge_data["keywords"],
+                    weight=edge_data["weight"],
+                    rank=edge_data["rank"],
+                    created_at=edge_data["created_at"],
+                    file_path=edge_data["file_path"]
+                )
+        
+        if len(G.nodes) == 0:
+            st.info("图谱中没有节点")
+            return
+
+        html_content = process_grpah(G)
+        st.components.v1.html(html_content, height=800)
+
+    except Exception as e:
+        st.error(f"创建查询图谱时发生错误: {str(e)}")
+        st.exception(e)
 
 
 async def main():
@@ -320,9 +387,6 @@ async def main():
 
         if uploaded_file is not None:
             await _process_uploaded_file(uploaded_file)
-
-        if 'has_document' not in st.session_state:
-            st.session_state.has_document = False
 
         st.subheader("🤖 模型设置")
         model_display = st.selectbox("选择模型",
@@ -363,7 +427,7 @@ async def main():
                 help="选择AI回答的格式样式",
                 key="response_type_select"
             )
-            top_k = st.slider("检索数量(top_k)", min_value=1, max_value=120, value=60,
+            top_k = st.slider("检索数量(top_k)", min_value=1, max_value=120, value=10,
                               help="在local模式下表示检索的实体数量，在global模式下表示检索的关系数量")
             max_token_for_text_unit = st.slider("文本单元最大token数", min_value=1000, max_value=8000, value=4000,
                                                 help="原始文本块的最大token数量")
@@ -380,48 +444,52 @@ async def main():
     if not st.session_state.has_document:
         st.warning("请先上传文档后再开始对话")
         return
-    col1, col2 = st.columns([4, 3])
-    with col1:
-        st.subheader("💬 对话")
-        if "rag_messages" not in st.session_state:
-            st.session_state.rag_messages = []
+    tab1, tab2 = st.tabs(['对话', '图谱全貌'])
+    with tab1:
+        col1, col2 = st.columns([4, 3])
+        with col1:
+            st.subheader("💬 对话")
 
-        for message in st.session_state.rag_messages:
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
+            for message in st.session_state.rag_messages:
+                with st.chat_message(message["role"]):
+                    st.markdown(message["content"])
 
-        if prompt := st.chat_input("输入您的问题"):
-            with st.chat_message("user"):
-                st.markdown(prompt)
+            if prompt := st.chat_input("输入您的问题"):
+                with st.chat_message("user"):
+                    st.markdown(prompt)
+                st.session_state.current_query_nodes = []
+                st.session_state.current_query_edges = []
 
-            st.session_state.rag_messages.append({"role": "user", "content": prompt})
-            with st.chat_message("assistant"):
-                try:
-                    assistant_response = await st.session_state.rag.aquery(
-                        query=prompt,
-                        param=QueryParam(
-                            mode=query_mode,
-                            only_need_context=only_need_context,
-                            only_need_prompt=only_need_prompt,
-                            response_type=response_type,
-                            top_k=top_k,
-                            max_token_for_text_unit=max_token_for_text_unit,
-                            max_token_for_global_context=max_token_for_global_context,
-                            max_token_for_local_context=max_token_for_local_context,
-                            conversation_history=st.session_state.rag_messages,
-                            stream=True
+                st.session_state.rag_messages.append({"role": "user", "content": prompt})
+                with st.chat_message("assistant"):
+                    try:
+                        assistant_response = await st.session_state.rag.aquery(
+                            query=prompt,
+                            param=QueryParam(
+                                mode=query_mode,
+                                only_need_context=only_need_context,
+                                only_need_prompt=only_need_prompt,
+                                response_type=response_type,
+                                top_k=top_k,
+                                max_token_for_text_unit=max_token_for_text_unit,
+                                max_token_for_global_context=max_token_for_global_context,
+                                max_token_for_local_context=max_token_for_local_context,
+                                conversation_history=st.session_state.rag_messages,
+                                stream=True
+                            )
                         )
-                    )
-                    placeholder = st.empty()
-                    content = await print_stream(assistant_response, placeholder)
-                    st.session_state.rag_messages.append({"role": "assistant", "content": content})
+                        placeholder = st.empty()
+                        content = await print_stream(assistant_response, placeholder)
+                        st.session_state.rag_messages.append({"role": "assistant", "content": content})
 
-                except Exception as outer_e:
-                    st.error(f"问答过程发生错误: {str(outer_e)}")
-                finally:
-                    await st.session_state.rag.finalize_storages()
+                    except Exception as outer_e:
+                        st.error(f"问答过程发生错误: {str(outer_e)}")
+                    finally:
+                        await st.session_state.rag.finalize_storages()
 
-    with col2:
+        with col2:
+            create_current_query_subgraph()
+    with tab2:
         st.subheader("📊 知识图谱")
         if not st.session_state.has_document:
             st.warning("请先上传文档以生成知识图谱")
