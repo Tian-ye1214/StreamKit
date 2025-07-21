@@ -4,9 +4,10 @@ import random
 import tempfile
 import networkx as nx
 from pyvis.network import Network
-from pages.lightrag.llm.openai import openai_complete_if_cache, openai_embed
+from pages.lightrag.llm.openai import openai_complete_if_cache
+from pages.lightrag.llm.siliconcloud import siliconcloud_embedding
 from pages.Functions.ExtractFileContents import extract_text
-from pages.Functions.Constants import EMBEDDING_MODEL_MAPPING, HIGHSPEED_MODEL_MAPPING
+from pages.Functions.Constants import EMBEDDING_MODEL_MAPPING, HIGHSPEED_MODEL_MAPPING, EMBEDDING_DIM
 import os
 import asyncio
 import logging
@@ -103,16 +104,6 @@ async def llm_model_func(prompt, system_prompt=None, history_messages=[], **kwar
     )
 
 
-async def embedding_func(texts: list[str]):
-    embedding_model = st.session_state.get('embedding_model')
-    return await openai_embed(
-        texts,
-        model=embedding_model,
-        api_key=os.environ.get('SiliconFlow_API_KEY'),
-        base_url=os.environ.get('SiliconFlow_URL'),
-    )
-
-
 def get_user_working_dir(filename=None):
     base_dir = "user_workspaces"
     os.makedirs(base_dir, exist_ok=True)
@@ -139,12 +130,17 @@ async def init_rag(filename=None):
         working_dir=working_dir,
         llm_model_func=llm_model_func,
         embedding_func=EmbeddingFunc(
-            embedding_dim=4096 if st.session_state.get('embedding_model') == 'Qwen/Qwen3-Embedding-8B' else 1024,
+            embedding_dim=st.session_state.embed_dim,
             max_token_size=8192,
-            func=embedding_func),
+            func=lambda texts: siliconcloud_embedding(
+                texts,
+                model=st.session_state.embed_model,
+                max_token_size=8192,
+                api_key=os.environ.get('SiliconFlow_API_KEY')
+            ),
+        ),
         addon_params={"language": "Simplified Chinese"},
     )
-
     await rag.initialize_storages()
     await initialize_pipeline_status()
 
@@ -285,7 +281,9 @@ def initialize():
     if "llm_model" not in st.session_state:
         st.session_state.llm_model = 'deepseek-chat'
     if "embedding_model" not in st.session_state:
-        st.session_state.embedding_model = 'Qwen/Qwen3-Embedding-8B'
+        st.session_state.embed_model = 'Qwen/Qwen3-Embedding-8B'
+    if "embed_dim" not in st.session_state:
+        st.session_state.embed_dim = 4096
     if "rag_messages" not in st.session_state:
         st.session_state.rag_messages = []
     if 'has_document' not in st.session_state:
@@ -322,10 +320,6 @@ def create_current_query_subgraph():
                 edge_id = str(edge_data["id"])
                 entity1_id = str(edge_data["entity1"])
                 entity2_id = str(edge_data["entity2"])
-                # if entity1_id not in G.nodes:
-                #     G.add_node(entity1_id, label=f"{entity1_id}")
-                # if entity2_id not in G.nodes:
-                #     G.add_node(entity2_id, label=f"{entity2_id}")
                 
                 G.add_edge(
                     entity1_id,
@@ -385,8 +379,6 @@ async def main():
             help="支持的格式：PDF、Excel文件(xlsx/xls)、文本文件(txt), Document文件(doc/docx)"
         )
 
-        if uploaded_file is not None:
-            await _process_uploaded_file(uploaded_file)
 
         st.subheader("🤖 模型设置")
         model_display = st.selectbox("选择模型",
@@ -402,7 +394,11 @@ async def main():
                                          key="embed_model_select")
 
         st.session_state.llm_model = HIGHSPEED_MODEL_MAPPING[model_display]
-        st.session_state.embedding_model = EMBEDDING_MODEL_MAPPING[emb_model_display]
+        st.session_state.embed_model = EMBEDDING_MODEL_MAPPING[emb_model_display]
+        st.session_state.embed_dim = EMBEDDING_DIM[emb_model_display]
+
+        if uploaded_file is not None:
+            await _process_uploaded_file(uploaded_file)
 
         st.subheader("🔍 查询模式")
         query_mode = st.selectbox(
@@ -481,11 +477,11 @@ async def main():
                         placeholder = st.empty()
                         content = await print_stream(assistant_response, placeholder)
                         st.session_state.rag_messages.append({"role": "assistant", "content": content})
-
-                    except Exception as outer_e:
-                        st.error(f"问答过程发生错误: {str(outer_e)}")
+                    except Exception as e:
+                        st.error(e)
                     finally:
-                        await st.session_state.rag.finalize_storages()
+                        if st.session_state.rag:
+                            await st.session_state.rag.finalize_storages()
 
         with col2:
             create_current_query_subgraph()
