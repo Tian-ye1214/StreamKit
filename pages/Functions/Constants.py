@@ -13,6 +13,7 @@ HIGHSPEED_MODEL_MAPPING = {
     "GPT-4.1": "gpt-4.1",
     "Gemini-2.5-pro-thinking": "gemini-2.5-pro-preview-06-05-thinking",
     "Grok4": "grok-4",
+    "LLaMA-4-Maverick": "llama-4-maverick-17b-128e-instruct",
 }
 
 VISIONMODAL_MAPPING = {
@@ -43,11 +44,23 @@ MAX_TOKEN_LIMIT = {
     "gpt-4.1": 131072,
     "grok-4": 200000,
     "claude-sonnet-4-20250514-thinking": 200000,
+    "claude-opus-4-20250514-thinking": 200000,
+    "llama-4-maverick-17b-128e-instruct": 1000000,
 }
 
 EMBEDDING_MODEL_MAPPING = {
     "Qwen3-Embedding-8B": "Qwen/Qwen3-Embedding-8B",
+    "Qwen3-Embedding-4B": "Qwen/Qwen3-Embedding-4B",
+    "Qwen3-Embedding-0.6B": "Qwen/Qwen3-Embedding-0.6B",
     "BGE-M3": "Pro/BAAI/bge-m3",
+    "BCE-Base": "netease-youdao/bce-embedding-base_v1",
+}
+EMBEDDING_DIM = {
+    "Qwen3-Embedding-8B": 4096,
+    "Qwen3-Embedding-4B": 2048,
+    "Qwen3-Embedding-0.6B": 1024,
+    "BGE-M3": 1024,
+    "BCE-Base": 768,
 }
 
 SEARCH_METHODS = {
