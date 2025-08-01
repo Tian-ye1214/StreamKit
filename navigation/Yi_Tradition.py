@@ -3,61 +3,28 @@ import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM, TextIteratorStreamer
 import asyncio
 from threading import Thread
-from openai import AsyncOpenAI
 from pages.Functions.Constants import HIGHSPEED_MODEL_MAPPING
-import os
+from pages.Functions.CallLLM import CallLLM
 import re
 import random
 import gc
 
 
-async def ini_model(model_path):
-    st.session_state.model = AutoModelForCausalLM.from_pretrained(
-        model_path,
-        torch_dtype=torch.bfloat16,
-        device_map="auto",
-        attn_implementation="flash_attention_2",
-    )
+MODEL_MAPPING = {
+    'Qwen3-8B': '/home/li/桌面/models/Qwen3-8B-TrainingCheckpoints/qwen3-8B',
+    'Yi-0.0.1-FullTrain-8B': '/home/li/桌面/models/Qwen3-8B-TrainingCheckpoints/qwen3_sft',
+    'Yi-0.0.1-LoRA-8B': '/home/li/桌面/models/Qwen3-8B-TrainingCheckpoints/qwen3_lora_sft',
+    'Yi-0.0.2-FullTrain-6000steps-8B': '/home/li/桌面/models/Qwen3-8B-TrainingCheckpoints/Yi-0.0.2-Full-6000',
+    'Yi-0.0.2-pro-LoRA': '/home/li/桌面/models/Qwen3-8B-TrainingCheckpoints/Yi-0.0.2-pro-LoRA',
+    'Yi-0.0.3-2000-LoRA': '/home/li/桌面/models/Qwen3-8B-TrainingCheckpoints/Yi-0.0.3-LoRA',
+    'Yi-0.0.3-6000-LoRA': '/home/li/桌面/models/Qwen3-8B-TrainingCheckpoints/Yi-0.0.3-6000-LoRA',
+    'Yi-0.0.4-LoRA': '/home/li/桌面/models/Qwen3-8B-TrainingCheckpoints/Yi-0.0.4-lora',
+    'Yi-0.0.4-Full': '/home/li/桌面/models/Qwen3-8B-TrainingCheckpoints/Yi-0.0.4-full',
+    'Yi-0.0.4-Pro': '/home/li/桌面/models/Qwen3-8B-TrainingCheckpoints/Yi-0.0.4_pro',
+}
 
 
-async def ini_tokenizer(model_path):
-    st.session_state.tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=True)
-
-
-async def call_llm(info_placeholder, reason_placeholder, message_placeholder, generated_text, reasoning_content):
-    choicen_model = random.choice(list(HIGHSPEED_MODEL_MAPPING.keys()))
-    info_placeholder.markdown(f'选择{choicen_model}执行任务')
-    choicen_model = HIGHSPEED_MODEL_MAPPING[choicen_model]
-    async for chunk in await st.session_state.client.chat.completions.create(
-            model=choicen_model,
-            messages=st.session_state.messages,
-            temperature=st.session_state.temperature,
-            top_p=st.session_state.top_p,
-            presence_penalty=st.session_state.presence_penalty,
-            frequency_penalty=st.session_state.frequency_penalty,
-            max_tokens=st.session_state.max_tokens,
-            stream=True
-    ):
-        if chunk.choices and len(chunk.choices) > 0:
-            delta = chunk.choices[0].delta
-            if getattr(delta, 'reasoning_content', None):
-                reasoning_content += delta.reasoning_content
-                reason_placeholder.markdown(
-                    f"<div style='background:#f0f0f0; border-radius:5px; padding:10px; margin-bottom:10px; font-size:14px;'>"
-                    f"🤔 {reasoning_content}</div>",
-                    unsafe_allow_html=True
-                )
-            if delta and delta.content is not None:
-                generated_text += delta.content
-                message_placeholder.markdown(
-                    f"<div style='font-size:16px; margin-top:10px;'>{generated_text}</div>",
-                    unsafe_allow_html=True
-                )
-    return generated_text
-
-
-async def unload_model():
-    """卸载当前加载的模型和tokenizer"""
+def unload_model():
     if 'model' in st.session_state:
         del st.session_state.model
     if 'tokenizer' in st.session_state:
@@ -68,7 +35,7 @@ async def unload_model():
     gc.collect()
 
 
-async def call_yi(info_placeholder, current_message, generated_text, message_placeholder):
+def call_yi(info_placeholder, current_message, generated_text, message_placeholder):
     info_placeholder.markdown(f'已选择{st.session_state.model_display}执行任务')
     st.session_state.text = st.session_state.tokenizer.apply_chat_template(
         current_message,
@@ -85,7 +52,9 @@ async def call_yi(info_placeholder, current_message, generated_text, message_pla
         top_p=st.session_state.top_p,
         min_p=0.0,
         temperature=st.session_state.temperature,
-        streamer=st.session_state.streamer
+        streamer=st.session_state.streamer,
+        repetition_penalty=1.5,
+        no_repeat_ngram_size=5,
     )
     thread = Thread(target=st.session_state.model.generate, kwargs=generate_params)
     thread.start()
@@ -103,8 +72,7 @@ async def ini_message():
             {"role": "system", "content": "You are a helpful assistant."},
         ]
     if 'client' not in st.session_state:
-        st.session_state.client = AsyncOpenAI(api_key=os.environ.get('ZhiZz_API_KEY'),
-                                              base_url=os.environ.get('ZhiZz_URL'))
+        st.session_state.client = CallLLM()
     if 'Yi_message_list' not in st.session_state:
         st.session_state.Yi_message_list = []
 
@@ -119,15 +87,6 @@ def contains_yi_text(text):
 
 
 async def parameter_settings():
-    MODEL_MAPPING = {
-        'Qwen3-8B': '/home/li/桌面/models/Qwen3-8B-TrainingCheckpoints/qwen3-8B',
-        'Yi-0.0.1-FullTrain-8B': '/home/li/桌面/models/Qwen3-8B-TrainingCheckpoints/qwen3_sft',
-        'Yi-0.0.1-LoRA-8B': '/home/li/桌面/models/Qwen3-8B-TrainingCheckpoints/qwen3_lora_sft',
-        'Yi-0.0.2-FullTrain-6000steps-8B': '/home/li/桌面/models/Qwen3-8B-TrainingCheckpoints/Yi-0.0.2-Full-6000',
-        'Yi-0.0.2-pro-LoRA': '/home/li/桌面/models/Qwen3-8B-TrainingCheckpoints/Yi-0.0.2-pro-LoRA',
-        'Yi-0.0.3-2000-LoRA': '/home/li/桌面/models/Qwen3-8B-TrainingCheckpoints/Yi-0.0.3-LoRA',
-        'Yi-0.0.3-6000-LoRA': '/home/li/桌面/models/Qwen3-8B-TrainingCheckpoints/Yi-0.0.3-6000-LoRA',
-    }
     with st.sidebar:
         previous_model = st.session_state.get('model_display', None)
         st.session_state.model_display = st.selectbox("选择模型", list(MODEL_MAPPING.keys()), index=6, help="选择模型")
@@ -154,11 +113,17 @@ async def parameter_settings():
                                                                help="控制回复中相同词汇重复性，值越高重复性越低")
 
         if previous_model != st.session_state.model_display or 'tokenizer' not in st.session_state or 'model' not in st.session_state:
-            await unload_model()
+            unload_model()
             try:
                 with st.spinner('加载模型中...'):
-                    tasks = [ini_model(st.session_state.model_path), ini_tokenizer(st.session_state.model_path)]
-                    await asyncio.gather(*tasks)
+                    st.session_state.model = AutoModelForCausalLM.from_pretrained(
+                        st.session_state.model_path,
+                        torch_dtype=torch.bfloat16,
+                        device_map="auto",
+                        attn_implementation="flash_attention_2",
+                        low_cpu_mem_usage=True
+                    )
+                    st.session_state.tokenizer = AutoTokenizer.from_pretrained(st.session_state.model_path, use_fast=True)
                     st.session_state.streamer = TextIteratorStreamer(st.session_state.tokenizer,
                                                                      skip_prompt=True, skip_special_tokens=True)
             except Exception as e:
@@ -196,14 +161,24 @@ async def main():
             reason_placeholder = st.empty()
             message_placeholder = st.empty()
             generated_text = ""
-            reasoning_content = ""
             try:
                 if st.session_state.use_agent and not contains_yi_text(user_input):
-                    generated_text = await call_llm(info_placeholder, reason_placeholder, message_placeholder,
-                                                    generated_text, reasoning_content)
+                    choicen_model = random.choice(list(HIGHSPEED_MODEL_MAPPING.keys()))
+                    info_placeholder.markdown(f'选择{choicen_model}执行任务')
+                    choicen_model = HIGHSPEED_MODEL_MAPPING[choicen_model]
+                    model_parameter = {
+                        "model": choicen_model,
+                        "messages": st.session_state.messages,
+                        "temperature": st.session_state.temperature,
+                        "top_p": st.session_state.top_p,
+                        "presence_penalty": st.session_state.presence_penalty,
+                        "frequency_penalty": st.session_state.frequency_penalty,
+                        "max_tokens": 8192
+                    }
+                    generated_text = await st.session_state.client.call(reason_placeholder, message_placeholder, True, model_parameter)
                 else:
                     with torch.inference_mode():
-                        generated_text = await call_yi(info_placeholder, current_message, generated_text,
+                        generated_text = call_yi(info_placeholder, current_message, generated_text,
                                                        message_placeholder)
                 st.session_state.messages.append({"role": "assistant", "content": generated_text})
             except Exception as e:
