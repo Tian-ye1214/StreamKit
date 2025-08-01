@@ -317,7 +317,8 @@ async def rag_with_ai(rag_system):
                     "model": st.session_state.selected_model,
                     "messages": Intentmessage,
                     "temperature": 0.6,
-                    "max_tokens": 8192
+                    "max_tokens": 8192,
+                    "response_format": {"type": "json_object"},
                 }
                 response = await st.session_state.Client.call(reason_placeholder, message_placeholder, True, **model_parameter)
                 user_intents = json.loads(response)
