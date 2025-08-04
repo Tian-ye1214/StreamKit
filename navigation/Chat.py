@@ -8,13 +8,13 @@ st.set_page_config(
     page_title="Chat With AI",
     page_icon="🤖",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="auto",
 )
 
 
 async def main():
     backend = BackendInteractionLogic()
-    await backend.initialize_session_state()
+    backend.initialize_session_state()
     st.markdown("""
     <h1 style='text-align: center;'>
         Chat With AI
@@ -22,33 +22,10 @@ async def main():
     <div style='text-align: center; margin-bottom: 20px;'>
     </div>
     """, unsafe_allow_html=True)
-    with st.expander("使用说明", expanded=False):
-        st.markdown("""
-        🌟 **欢迎来到未来对话体验** 🌟
-
-        💡 **快速上手**
-        1. 在侧边栏选择心仪模型
-        2. 对话框直接输入问题
-        3. 见证AI的创意迸发
-
-        🎨 **个性化设置**\n
-        ✅ 多个模型自由切换<br>
-        ✅ 温度参数实时调节<br>
-        ✅ 上下文记忆深度定制<br>
-
-        <div style="background: #FCF3CF; padding: 15px; border-radius: 5px; margin-top: 20px;">
-            🎭 试试让AI：<br>
-            • 用莎士比亚风格写周报<br>
-            • 用幼儿园术语解释量子纠缠<br>
-            • 为你的创业计划提供风险评估<br>
-            每一次对话都是新的冒险！
-        </div>
-        """, unsafe_allow_html=True)
 
     with st.sidebar:
-        await asyncio.gather(backend.user_interaction(), backend.start_new_conversation(),
-                             backend.parameter_configuration())
-
+        await asyncio.gather(backend.user_interaction(), backend.start_new_conversation()
+                             , backend.parameter_configuration())
         st.markdown("""
         <h3 style='text-align: center;'>
             模型配置
@@ -72,7 +49,7 @@ async def main():
         """, unsafe_allow_html=True)
 
     if sections == '视觉对话':
-        await backend.image_upload()
+        backend.image_upload()
 
     for message in st.session_state.chat_messages:
         with st.chat_message(message["role"]):
@@ -83,7 +60,7 @@ async def main():
 
         with st.chat_message("assistant"):
             try:
-                with st.spinner('大模型思考中'):
+                with st.spinner('模型思考中'):
                     await asyncio.gather(backend.ai_generation(sections))
             except Exception as e:
                 st.error(f"生成回答时出错: {str(e)}")
