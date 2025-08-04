@@ -288,7 +288,7 @@ class BackendInteractionLogic:
         st.session_state.messages.extend([{"role": m["role"], "content": m["content"]}
                                           for m in st.session_state.chat_messages])
         st.session_state.chat_messages.append(st.session_state.current_prompt)
-        base64_image = await encode_image_to_base64(st.session_state.uploaded_image) if st.session_state.get(
+        base64_image = encode_image_to_base64(st.session_state.uploaded_image) if st.session_state.get(
             "uploaded_image",
             None) else None
         if base64_image and sections == '视觉对话':
@@ -346,25 +346,31 @@ class BackendInteractionLogic:
 
     async def user_input(self, prompt):
         st.markdown("""
-                                    <style>
-                                    .stChatMessage[data-testid="stChatMessage"] {
-                                        background-color: #fdfdf8 !important;
-                                        border-radius: 8px;
-                                        margin: 5px 0;
-                                        padding: 10px;
-                                    }
-
-                                    .stChatMessage[data-testid="stChatMessage"] p {
-                                        font-size: 24px !important;
-                                    }
-
-                                    [data-testid="stChatMessage"]:has([aria-label="Chat message from user"]) {
-                                            flex-direction: row-reverse;
-                                            text-align: right;
-                                        }
-
-                                    </style>
-                                    """, unsafe_allow_html=True)
+        <style>
+            .stChatMessage[data-testid="stChatMessage"] {
+                background-color: transparent !important;
+                border-radius: 8px;
+                margin: 5px 0;
+                padding: 10px;
+            }
+            .stChatMessage[data-testid="stChatMessage"] p {
+                font-size: 24px !important;
+            }
+            [data-testid="stChatMessage"]:has([aria-label="Chat message from user"]) {
+            flex-direction: row-reverse;
+            text-align: right;
+            }
+            .stBottom {
+                position: fixed;
+                top: 90%;
+                left: 60%;
+                bottom: auto;
+                transform: translate(-50%, -50%);
+                width: 100%;
+                max-width: 1000px;
+            }
+            </style>
+            """, unsafe_allow_html=True)
         st.session_state.token_counter = st.empty()
         st.session_state.prompt = prompt
         st.session_state.current_prompt = {"role": "user", "content": st.session_state.prompt}
