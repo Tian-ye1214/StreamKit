@@ -18,7 +18,7 @@ class SAM2Segment:
         self.mask_generator = SAM2AutomaticMaskGenerator(build_sam2(self.model_cfg, self.sam2_checkpoint
                                                                     , device=self.device, apply_postprocessing=False))
 
-    async def show_mask(self, mask, color=None, image=None, box=None):
+    def show_mask(self, mask, color=None, image=None, box=None):
         if color is None:
             color = np.array([30 / 255, 144 / 255, 255 / 255, 0.6])
         h, w = mask.shape[-2:]
@@ -46,7 +46,7 @@ class SAM2Segment:
 
         return result
 
-    async def show_points(self, image, clicks):
+    def show_points(self, image, clicks):
         if not clicks:
             return image
         result = image.copy()
@@ -62,7 +62,7 @@ class SAM2Segment:
 
         return result
 
-    async def show_masks(self, image, masks):
+    def show_masks(self, image, masks):
         """生成带有随机颜色和轮廓的掩码叠加图"""
         if len(masks) == 0:
             return np.zeros_like(image)
@@ -84,7 +84,7 @@ class SAM2Segment:
             cv2.drawContours(overlay, contours, -1, (0, 0, 1.0, 0.4), 1)
         return (overlay * 255).astype(np.uint8)
 
-    async def point_and_box_inference(self, image, input_point=None, input_label=None, input_box=None):
+    def point_and_box_inference(self, image, input_point=None, input_label=None, input_box=None):
         self.predictor.set_image(image)
         masks, scores, _ = self.predictor.predict(
             point_coords=input_point,
@@ -94,6 +94,6 @@ class SAM2Segment:
         )
         return masks
 
-    async def auto_mask_genarator(self, image):
+    def auto_mask_genarator(self, image):
         masks = self.mask_generator.generate(image)
         return masks
