@@ -2,6 +2,7 @@
 import streamlit as st
 from pages.Functions.BackendInteraction import BackendInteractionLogic
 from pages.Functions.Constants import HIGHSPEED_MODEL_MAPPING, VISIONMODAL_MAPPING
+from pages.Functions.js.background import BackgroundImage
 import asyncio
 import random
 
@@ -27,6 +28,7 @@ Greeting_Template = [
 
 
 async def main():
+    BackgroundImage()
     Assistant_placeholder = st.empty()
     backend = BackendInteractionLogic()
     backend.initialize_session_state()
@@ -41,13 +43,15 @@ async def main():
                             ["文本对话", "视觉对话"],
                             index=0,
                             )
+
         if sections == '文本对话':
             model_display = st.selectbox("选择模型", list(HIGHSPEED_MODEL_MAPPING.keys()), index=0, help="选择模型")
             st.session_state.model = HIGHSPEED_MODEL_MAPPING[model_display]
         else:
             model_display = st.selectbox("选择模型", list(VISIONMODAL_MAPPING.keys()), index=0, help="选择模型")
             st.session_state.model = VISIONMODAL_MAPPING[model_display]
-
+        if sections == '视觉对话':
+            backend.image_upload()
         await asyncio.gather(backend.user_interaction(), backend.start_new_conversation()
                              , backend.parameter_configuration())
 
@@ -56,9 +60,6 @@ async def main():
         📧 [Z1092228927@outlook.com](mailto:Z1092228927@outlook.com)<br>
         🐱 [Tian-ye1214](https://github.com/Tian-ye1214)
         """, unsafe_allow_html=True)
-
-    if sections == '视觉对话':
-        backend.image_upload()
 
     for message in st.session_state.chat_messages:
         avatar = "😀" if message["role"] == "user" else "🤖"
@@ -84,35 +85,19 @@ async def main():
         """, unsafe_allow_html=True)
     else:
         st.markdown("""
-                    <style>
-                    .stChatMessage[data-testid="stChatMessage"] {
-                        background-color: #fdfdf8 !important;
-                        border-radius: 8px;
-                        margin: 5px 0;
-                        padding: 10px;
-                    }
-
-                    .stChatMessage[data-testid="stChatMessage"] p {
-                        font-size: 24px !important;
-                    }
-
-                    [data-testid="stChatMessage"]:has([aria-label="Chat message from user"]) {
-                            flex-direction: row-reverse;
-                            text-align: right;
-                        }
-
-                    .stBottom {
-                        position: fixed;
-                        top: 50%;
-                        left: 60%;
-                        bottom: auto;
-                        transform: translate(-50%, -50%);
-                        width: 100%;
-                        max-width: 1000px;
-                        background: #fdfdf8;
-                    }
-                    </style>
-                    """, unsafe_allow_html=True)
+        <style>
+        .stBottom {
+            position: fixed;
+            top: 50%;
+            left: 60%;
+            bottom: auto;
+            transform: translate(-50%, -50%);
+            width: 100%;
+            max-width: 1000px;
+            ackground: #fdfdf8;
+        }
+        </style>
+        """, unsafe_allow_html=True)
         st.markdown(f"""
         <h1 style='text-align: center;'>
             {random.choice(Greeting_Template)}
