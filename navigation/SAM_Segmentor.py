@@ -314,13 +314,11 @@ async def main():
         4. 通过侧边栏实时查看坐标记录
         5. 使用历史记录回溯操作步骤
 
-        <div style="background: #FCF3CF; padding: 15px; border-radius: 5px; margin-top: 20px;">
-            🔬 典型应用场景：<br>
-            • 人像前景与背景提取<br>
-            • 产品摄影背景分离<br>
-            • 遥感图像地物识别<br>
-            每次点击都带来精准分割！
-        </div>
+        🔬 典型应用场景：<br>
+        • 人像前景与背景提取<br>
+        • 产品摄影背景分离<br>
+        • 遥感图像地物识别<br>
+        每次点击都带来精准分割！
         """, unsafe_allow_html=True)
 
     uploaded_file = st.file_uploader("选择图片", type=["jpg", "png", "jpeg"])
@@ -418,3 +416,4 @@ if current_page != st.session_state.previous_page:
     st.session_state.clear()
     st.session_state.previous_page = current_page
 asyncio.run(main())
+
