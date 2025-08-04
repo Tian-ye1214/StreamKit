@@ -398,13 +398,11 @@ async def main():
         ✅ 自动生成预警新闻<br>
         ✅ 分析全国预警情况<br>
 
-        <div style="background: #FCF3CF; padding: 15px; border-radius: 5px; margin-top: 20px;">
-            🎭 试试这些功能：<br>
-            • 输入"全部区域"查看全国预警情况<br>
-            • 点击"分析全国预警信息"获取统计报告<br>
-            • 在"撰写预警新闻"标签页中自定义新闻模板<br>
-            每一次使用都是对气象灾害的及时预警！
-        </div>
+        试试这些功能：<br>
+        输入"全部区域"查看全国预警情况<br>
+        点击"分析全国预警信息"获取统计报告<br>
+        在"撰写预警新闻"标签页中自定义新闻模板<br>
+        每一次使用都是对气象灾害的及时预警！
         
         <div style="margin-top: 20px; text-align: center;">
             <p>作者：<a href="https://github.com/mwx66" target="_blank">@mwx66</a></p>
@@ -440,3 +438,4 @@ if current_page != st.session_state.previous_page:
     st.session_state.clear()
     st.session_state.previous_page = current_page
 asyncio.run(main())
+
