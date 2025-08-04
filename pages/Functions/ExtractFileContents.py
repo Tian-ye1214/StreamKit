@@ -5,11 +5,17 @@ import base64
 import streamlit as st
 
 
-async def encode_image_to_base64(uploaded_file):
+@st.cache_data()
+def encode_image_to_base64(uploaded_file):
     if uploaded_file is None:
         return None
     try:
-        bytes_data = uploaded_file.getvalue()
+        if isinstance(uploaded_file, str):
+            with open(uploaded_file, "rb") as image_file:
+                bytes_data = image_file.read()
+        else:
+            bytes_data = uploaded_file.getvalue()
+
         base64_image = base64.b64encode(bytes_data).decode('utf-8')
         return base64_image
     except Exception as e:
@@ -17,7 +23,7 @@ async def encode_image_to_base64(uploaded_file):
         return None
 
 
-async def extract_text_from_pdf(file):
+def extract_text_from_pdf(file):
     try:
         content = ""
         pdf_bytes = file.getvalue()
@@ -37,7 +43,7 @@ async def extract_text_from_pdf(file):
         return None
 
 
-async def extract_text_from_excel(file):
+def extract_text_from_excel(file):
     df = pd.read_excel(file)
     content = ""
     for column in df.columns:
@@ -46,7 +52,7 @@ async def extract_text_from_excel(file):
     return content
 
 
-async def extract_text_from_docx(docx_file):
+def extract_text_from_docx(docx_file):
     """从Word文件中提取文本"""
     doc = docx.Document(docx_file)
     text = ""
@@ -55,7 +61,7 @@ async def extract_text_from_docx(docx_file):
     return text
 
 
-async def extract_text_from_txt(file):
+def extract_text_from_txt(file):
     return file.getvalue().decode('utf-8')
 
 
@@ -63,13 +69,13 @@ async def extract_text(file):
     file_type = file.name.split('.')[-1].lower()
     try:
         if file_type == 'pdf':
-            return await extract_text_from_pdf(file)
+            return extract_text_from_pdf(file)
         elif file_type in ['doc', 'docx']:
-            return await extract_text_from_docx(file)
+            return extract_text_from_docx(file)
         elif file_type in ['xlsx', 'xls']:
-            return await extract_text_from_excel(file)
+            return extract_text_from_excel(file)
         elif file_type == 'txt':
-            return await extract_text_from_txt(file)
+            return extract_text_from_txt(file)
         else:
             raise ValueError(f"不支持的文件格式：{file_type}")
     except Exception as e:
