@@ -167,50 +167,62 @@ def process_grpah(G):
     with open(temp_path, 'r', encoding='utf-8') as f:
         html_content = f.read()
     custom_js = """
-    <script>
-    // 等待网络图加载完成
-    network.on("click", function(event) {
-        if (event.nodes.length > 0) {
-            var clickedNode = event.nodes[0];
-            var allNodes = network.body.data.nodes.getIds();
-            var connectedNodes = network.getConnectedNodes(clickedNode);
-
-            // 隐藏所有节点
-            allNodes.forEach(function(nodeId) {
-                network.body.data.nodes.update({
-                    id: nodeId,
-                    hidden: true
-                });
+<script>
+// 等待网络图加载完成
+network.on("click", function(event) {
+    if (event.nodes.length > 0) {
+        var clickedNode = event.nodes[0];
+        var allNodes = network.body.data.nodes.getIds();
+        var connectedNodes = network.getConnectedNodes(clickedNode);
+        
+        // 创建可见节点集合（包括点击的节点和相连节点）
+        var visibleNodeSet = new Set([clickedNode, ...connectedNodes]);
+        
+        // 批量准备更新数据
+        var updateData = [];
+        allNodes.forEach(function(nodeId) {
+            updateData.push({
+                id: nodeId,
+                hidden: !visibleNodeSet.has(nodeId)
             });
-
-            // 显示点击的节点及其相连的节点
-            network.body.data.nodes.update({
-                id: clickedNode,
-                hidden: false
+        });
+        
+        // 一次性批量更新所有节点
+        network.body.data.nodes.update(updateData);
+        
+        // 同时更新相关的边
+        var allEdges = network.body.data.edges.getIds();
+        var edgeUpdateData = [];
+        allEdges.forEach(function(edgeId) {
+            var edge = network.body.data.edges.get(edgeId);
+            var shouldShow = visibleNodeSet.has(edge.from) && visibleNodeSet.has(edge.to);
+            edgeUpdateData.push({
+                id: edgeId,
+                hidden: !shouldShow
             });
-            connectedNodes.forEach(function(nodeId) {
-                network.body.data.nodes.update({
-                    id: nodeId,
-                    hidden: false
-                });
-            });
-
-            // 更新网络图
-            network.redraw();
-        } else {
-            // 点击空白区域时显示所有节点
-            var allNodes = network.body.data.nodes.getIds();
-            allNodes.forEach(function(nodeId) {
-                network.body.data.nodes.update({
-                    id: nodeId,
-                    hidden: false
-                });
-            });
-            network.redraw();
-        }
-    });
-    </script>
-    """
+        });
+        network.body.data.edges.update(edgeUpdateData);
+        
+    } else {
+        // 点击空白区域时显示所有节点和边
+        var allNodes = network.body.data.nodes.getIds();
+        var allEdges = network.body.data.edges.getIds();
+        
+        // 批量更新所有节点为可见
+        var nodeUpdateData = allNodes.map(function(nodeId) {
+            return { id: nodeId, hidden: false };
+        });
+        network.body.data.nodes.update(nodeUpdateData);
+        
+        // 批量更新所有边为可见
+        var edgeUpdateData = allEdges.map(function(edgeId) {
+            return { id: edgeId, hidden: false };
+        });
+        network.body.data.edges.update(edgeUpdateData);
+    }
+});
+</script>
+"""
     html_content = html_content.replace('</body>', custom_js + '</body>')
     try:
         os.remove(temp_path)
@@ -501,3 +513,4 @@ if current_page != st.session_state.previous_page:
     st.session_state.previous_page = current_page
 configure_logging()
 asyncio.run(main())
+
