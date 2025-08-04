@@ -36,7 +36,7 @@ class BackendInteractionLogic:
             return self.count_tokens(content)
         return self.count_tokens(str(message))
 
-    async def initialize_session_state(self):
+    def initialize_session_state(self):
         """
         初始化各项参数，保存在session中
         """
@@ -44,8 +44,6 @@ class BackendInteractionLogic:
             st.session_state.Client = CallLLM()
         if "chat_messages" not in st.session_state:
             st.session_state.chat_messages = []
-        if len(st.session_state.chat_messages) > 20:
-            st.session_state.chat_messages = st.session_state.chat_messages[-20:]
         if "system_prompt" not in st.session_state:
             st.session_state.system_prompt = (
                 "You are a helpful assistant.You should reply to users in markdown format."
@@ -158,7 +156,7 @@ class BackendInteractionLogic:
                     del st.session_state.delete_target
                     st.rerun()
 
-    async def image_upload(self):
+    def image_upload(self):
         with st.expander("图片上传", expanded=False):
             st.session_state.uploaded_image = st.file_uploader(
                 "上传图片",
@@ -222,12 +220,15 @@ class BackendInteractionLogic:
             if uploaded_file:
                 try:
                     file_content = await extract_text(uploaded_file)
-                    if file_content:
+                    file_token = self.count_tokens(file_content)
+                    if file_content and file_token < 0.75 * MAX_TOKEN_LIMIT[st.session_state.model]:
                         st.session_state.file_content = file_content
-                        st.success("文件上传成功！")
+                        st.success(f"文件上传成功！文档token数：{file_token}")
                         st.text_area("文件内容预览",
                                      value=file_content[:200] + "...",
                                      height=150)
+                    else:
+                        st.error('文档上传错误！请检查文档是否存在或者文档是否过大！')
                 except Exception as e:
                     st.error(f"文件处理失败: {str(e)}")
 
@@ -251,7 +252,7 @@ class BackendInteractionLogic:
                                                                       value=3,
                                                                       help="设置最大返回的搜索结果数量")
 
-    async def get_system_prompt(self):
+    def get_system_prompt(self):
         if st.session_state.file_content and st.session_state.search_result and st.session_state.search_mode in SEARCH_METHODS:
             return generate_combined_prompt(
                 st.session_state.file_content,
@@ -280,7 +281,7 @@ class BackendInteractionLogic:
                 st.session_state.search_result = None
 
     async def ai_generation(self, sections):
-        st.session_state.messages = [{"role": "system", "content": await self.get_system_prompt()}]
+        st.session_state.messages = [{"role": "system", "content": self.get_system_prompt()}]
         st.session_state.messages.extend([{"role": m["role"], "content": m["content"]}
                                           for m in st.session_state.chat_messages])
         st.session_state.chat_messages.append(st.session_state.current_prompt)
