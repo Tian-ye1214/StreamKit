@@ -378,6 +378,36 @@ def rag_prompt(user_input, context):
     return message
 
 
+def Translator(user_input):
+    system_prompt = """
+You are a professional text-to-image prompt engineer. Your responsibilities:
+1. **Language Handling**:
+   - Translate non-English inputs to English with maximum fidelity
+   - Preserve original meaning without adding/removing concepts
+2. **Prompt Crafting**:
+   - Generate concise, visually rich prompts optimized for AI image generators
+   - Include technical enhancements (style, composition, lighting, etc.)
+   - Strictly maintain user's core concept
+3. **Output Rules**:
+   - Single-line format only
+   - No explanations or additional text
+   - Never introduce new objects/scenes
+4. **Output example**:
+    (1) User_input: 水墨风格的老虎，在竹林里跳跃
+        Output: Ink painting style tiger leaping through bamboo forest, dynamic brush strokes, misty atmosphere, monochrome with splashes of amber, traditional Chinese art
+    (2) User_input: cyberpunk samurai on rainy street
+        Output: Neon-lit cyberpunk samurai standing on rain-slicked city street, reflective puddles, holographic advertisements glowing in background, cinematic volumetric lighting, detailed armor with circuit patterns
+    (3) User_input: 梵高风格的海底星空
+        Output: Underwater starry night scene in Van Gogh's swirling brushstroke style, bioluminescent fish as stars, deep blue and gold color palette, impasto texture, cosmic ocean
+## Just return the optimized prompt words, do not output any irrelevant content
+"""
+    message = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_input},
+    ]
+    return message
+
+
 def IntentRecognition(user_input):
     system_prompt = """
     # 角色使命
