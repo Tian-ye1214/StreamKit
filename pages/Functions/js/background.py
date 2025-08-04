@@ -1,4 +1,5 @@
 import streamlit as st
+from pages.Functions.ExtractFileContents import encode_image_to_base64
 
 
 def HomePagePartical():
@@ -218,4 +219,44 @@ def HomePagePartical():
     """, unsafe_allow_html=True)
     st.components.v1.html(particles_js, height=2000, width=2000)
     st.markdown('<div class="content-overlay"></div>', unsafe_allow_html=True)
+
+
+def BackgroundImage():
+    main_back = encode_image_to_base64('static/BackGround.png')
+    side_back = encode_image_to_base64('static/SideGround.png')
+    css = f"""
+         <style>
+        #  [data-testid="stSidebar"] > div:first-child {{
+        #     background: url(data:image/png;base64,{side_back});
+        # }}
+         .stAppToolbar {{visibility: hidden;}}
+         .stAppHeader {{visibility: hidden;}}
+
+         .st-emotion-cache-1y34ygi {{
+            width: 100%;
+            padding: 0rem 0rem 0rem;
+            max-width: initial;
+            min-width: auto;
+        }}
+        .st-emotion-cache-12a8qxx {{
+            border-radius: 0px;
+        }}
+         .stApp::before {{
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url(data:image/png;base64,{main_back});
+            background-size: cover;
+            opacity: 0.3;
+            z-index: -1;
+         }}
+         .stApp {{
+             background-color: transparent;
+         }}
+         </style>
+         """
+    st.markdown(css, unsafe_allow_html=True)
 
