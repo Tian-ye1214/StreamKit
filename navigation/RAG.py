@@ -426,8 +426,8 @@ async def main():
     <div style='text-align: center; margin-bottom: 20px;'>
     </div>
     """, unsafe_allow_html=True)
-    rag_system = RAG(embedding_model_path='G:/代码/ModelWeight/Qwen3-embedding',
-                     rerank_model_path='G:/代码/ModelWeight/Qwen3-rerank')
+    rag_system = RAG(embedding_model_path='pages/ModelCheckpoint/Qwen3-embedding',
+                     rerank_model_path='pages/ModelCheckpoint/Qwen3-rerank')
     await initialization(rag_system)
 
     with st.expander("📖 项目说明", expanded=False):
@@ -529,3 +529,4 @@ if current_page != st.session_state.previous_page:
     st.session_state.clear()
     st.session_state.previous_page = current_page
 asyncio.run(main())
+
