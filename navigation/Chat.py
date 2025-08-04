@@ -2,7 +2,9 @@
 import streamlit as st
 from pages.Functions.BackendInteraction import BackendInteractionLogic
 from pages.Functions.Constants import HIGHSPEED_MODEL_MAPPING, VISIONMODAL_MAPPING
+from pages.Functions.js.background import ChatPageFormat
 import asyncio
+import random
 
 st.set_page_config(
     page_title="Chat With AI",
@@ -11,21 +13,27 @@ st.set_page_config(
     initial_sidebar_state="auto",
 )
 
+Greeting_Template = [
+    "今天需要我协助处理什么事项吗？",
+    "有什么我可以跟进的吗？",
+    "有什么需要我准备的吗？",
+    "有新的进展或问题需要讨论吗？",
+    "我这边随时待命，有需要请说。",
+    "有什么我能帮上忙的吗？",
+    "今天一切顺利吗？",
+    "今天有什么议程？",
+    "您在忙什么？",
+    "您今天在想什么？",
+]
+
 
 async def main():
+    ChatPageFormat()
+    Assistant_placeholder = st.empty()
     backend = BackendInteractionLogic()
     backend.initialize_session_state()
-    st.markdown("""
-    <h1 style='text-align: center;'>
-        Chat With AI
-    </h1>
-    <div style='text-align: center; margin-bottom: 20px;'>
-    </div>
-    """, unsafe_allow_html=True)
 
     with st.sidebar:
-        await asyncio.gather(backend.user_interaction(), backend.start_new_conversation()
-                             , backend.parameter_configuration())
         st.markdown("""
         <h3 style='text-align: center;'>
             模型配置
@@ -41,6 +49,9 @@ async def main():
         else:
             model_display = st.selectbox("选择模型", list(VISIONMODAL_MAPPING.keys()), index=0, help="选择模型")
             st.session_state.model = VISIONMODAL_MAPPING[model_display]
+
+        await asyncio.gather(backend.user_interaction(), backend.start_new_conversation()
+                             , backend.parameter_configuration())
 
         st.markdown("联系作者")
         st.markdown(f"""
@@ -64,6 +75,21 @@ async def main():
                     await asyncio.gather(backend.ai_generation(sections))
             except Exception as e:
                 st.error(f"生成回答时出错: {str(e)}")
+
+    if st.session_state.get('chat_messages', None):
+        Assistant_placeholder.markdown(f"""
+        <h4 style='text-align: left; margin-top: 10px; margin-bottom: 10px; font-size: 16px;'>
+            当前Assistant:{model_display}
+        </h4>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown(f"""
+        <h1 style='text-align: center;'>
+            {random.choice(Greeting_Template)}
+        </h1>
+        <div style='text-align: center; margin-bottom: 20px;'>
+        </div>
+        """, unsafe_allow_html=True)
 
 
 if 'previous_page' not in st.session_state:
