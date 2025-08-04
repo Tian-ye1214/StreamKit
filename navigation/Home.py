@@ -18,7 +18,7 @@ def load_css():
     .main-title {
         font-size: 2.5rem;
         font-weight: 700;
-        color: #adaaaa !important;
+        color: #ffffff !important;
         text-align: center;
         margin-bottom: 0.5rem;
         text-shadow: 0 0 20px rgba(247, 7, 7, 1);
@@ -59,7 +59,7 @@ def load_css():
         font-size: 1.3rem;
         font-weight: 600;
         margin-bottom: 0.3rem;
-        color: #adaaaa !important;
+        color: #ffffff !important;
     }
     
     .card-subtitle {
@@ -128,6 +128,14 @@ def load_css():
         padding-bottom: 0rem;
         max-width: 1400px;
     }
+    .st-emotion-cache-1kmqej1 {
+        position: absolute;
+        background: rgb(253, 253, 248);
+        color: rgb(255 255 255);
+        inset: 0px;
+        color-scheme: light;
+        overflow: hidden;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -148,11 +156,11 @@ def create_card(card_class, icon, title, subtitle, description, buttons=None, ex
     """
 
     st.markdown(card_html, unsafe_allow_html=True)
-
-    if buttons:
-        for button_text, page_name in buttons:
-            if st.button(button_text, key=f"btn_{page_name}_{card_class}"):
-                st.switch_page(f"navigation/{page_name}")
+    with st.expander("展开详情", expanded=False):
+        if buttons:
+            for button_text, page_name in buttons:
+                if st.button(button_text, key=f"btn_{page_name}_{card_class}"):
+                    st.switch_page(f"navigation/{page_name}")
 
 
 def main():
@@ -203,13 +211,13 @@ def main():
             "Dify Applications",
             "基于 Dify 平台的智能应用<br>Smart applications based on Dify platform",
             [
-                ("小红书文案生成", "Dify.py")
+                ("小红书文案生成", "Dify.py"),
             ]
         )
     st.markdown("<br><br>", unsafe_allow_html=True)
 
     st.markdown("""
-    <div style="text-align: center; color: #8b949e; font-size: 0.8rem; margin-top: 2rem;">
+    <div style="text-align: center; color: #ffffff; font-size: 0.8rem; margin-top: 2rem;">
         <p>🚀 享受未来感的AI界面导航体验！</p>
     </div>
     """, unsafe_allow_html=True)
