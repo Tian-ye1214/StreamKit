@@ -214,15 +214,26 @@ def HomePagePartical():
             z-index: 0;
             pointer-events: none;
         }
-
-        /* 确保聊天内容在粒子上方 */
-        .stChatMessage, .stChatInput {
-            background-color: rgba(0, 0, 0, 0.5) !important;
-            border-radius: 8px;
-            margin: 5px 0;
-            padding: 10px;
-        }
     </style>
     """, unsafe_allow_html=True)
     st.components.v1.html(particles_js, height=2000, width=2000)
     st.markdown('<div class="content-overlay"></div>', unsafe_allow_html=True)
+
+
+def ChatPageFormat():
+    st.markdown("""
+        <style>
+        .stChatMessage[data-testid="stChatMessage"] {
+            background-color: #fdfdf8 !important;
+            border-radius: 8px;
+            margin: 5px 0;
+            padding: 10px;
+        }
+        
+        [data-testid="stChatMessage"]:has([aria-label="Chat message from user"]) {
+                flex-direction: row-reverse;
+                text-align: right;
+            }
+        </style>
+        """, unsafe_allow_html=True)
+
