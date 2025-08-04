@@ -13,6 +13,7 @@ import re
 from PIL import Image
 import tiktoken
 from pages.Functions.CallLLM import CallLLM
+import datetime
 
 
 class BackendInteractionLogic:
@@ -45,9 +46,11 @@ class BackendInteractionLogic:
         if "chat_messages" not in st.session_state:
             st.session_state.chat_messages = []
         if "system_prompt" not in st.session_state:
-            st.session_state.system_prompt = (
-                "You are a helpful assistant.You should reply to users in markdown format."
-                "All mathematical formulas must be strictly enclosed between $...$")
+            system_prompt = f"""You are a helpful assistant.You should reply to users in markdown format.
+        All mathematical formulas must be strictly enclosed between $...$.
+        The current date is:{datetime.datetime.now().strftime('%Y-%m-%d')}
+        """
+            st.session_state.system_prompt = system_prompt
         if "file_content" not in st.session_state:
             st.session_state.file_content = None
         if "current_user" not in st.session_state:
@@ -345,5 +348,5 @@ class BackendInteractionLogic:
         st.session_state.token_counter = st.empty()
         st.session_state.prompt = prompt
         st.session_state.current_prompt = {"role": "user", "content": st.session_state.prompt}
-        with st.chat_message("user"):
+        with st.chat_message("user", avatar="😀"):
             st.markdown(st.session_state.prompt)
