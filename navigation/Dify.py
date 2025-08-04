@@ -28,12 +28,10 @@ with st.expander("使用说明", expanded=False):
         3. 选择专业级语调参数
         4. 实时查看节点处理状态
 
-        <div style="background: #FCF3CF; padding: 15px; border-radius: 5px; margin-top: 15px;">
-            🏆 典型应用场景：<br>
-            • 自动生成产品营销文案<br>
-            • 创建品牌合规内容<br>
-            • 快速产出多语言宣传材料<br>
-        </div>
+        🏆 典型应用场景：<br>
+        • 自动生成产品营销文案<br>
+        • 创建品牌合规内容<br>
+        • 快速产出多语言宣传材料<br>
 
         🔍 **状态追踪提示**：
         👁️ 实时查看节点处理进度<br>
@@ -145,5 +143,6 @@ if st.sidebar.button("🚀 开始生成"):
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("[在线访问 Dify 应用](https://udify.app/workflow/IvKSTMs6nut4Y1FC)")
+
 
 
