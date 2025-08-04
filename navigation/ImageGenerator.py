@@ -89,7 +89,7 @@ def main():
 
     _, col = st.columns([5, 1])
     with col:
-        st.image("pages/Functions/img/emblem.png", width=200)
+        st.image("static/emblem.png", width=200)
 
     st.markdown("""
     <h1 style='text-align: center;'>
