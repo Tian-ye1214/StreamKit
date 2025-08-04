@@ -21,7 +21,7 @@ class CallLLM:
                     if getattr(delta, 'reasoning_content', None):
                         reasoning_content += delta.reasoning_content
                         reason_placeholder.markdown(
-                            f"<div style='background:#f0f0f0; border-radius:5px; padding:10px; margin-bottom:10px; font-size:14px;'>"
+                            f"<div style='background:#c2c2c2; border-radius:5px; padding:10px; margin-bottom:10px; font-size:14px;'>"
                             f"🤔 {reasoning_content}</div>",
                             unsafe_allow_html=True
                         )
@@ -43,7 +43,7 @@ class CallLLM:
 
             if reasoning_content:
                 reason_placeholder.markdown(
-                    f"<div style='background:#f0f0f0; border-radius:5px; padding:10px; margin-bottom:10px; font-size:14px;'>"
+                    f"<div style='background:#c2c2c2; border-radius:5px; padding:10px; margin-bottom:10px; font-size:14px;'>"
                     f"🤔 {reasoning_content}</div>",
                     unsafe_allow_html=True
                 )
