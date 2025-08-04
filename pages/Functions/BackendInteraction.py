@@ -274,7 +274,7 @@ class BackendInteractionLogic:
                 method = getattr(search, SEARCH_METHODS[st.session_state.search_mode])
                 st.session_state.search_result = method()
 
-                with st.chat_message("assistant"):
+                with st.chat_message("assistant", avatar="🤖"):
                     st.markdown("🔍 搜索到以下相关信息：")
                     for i, result in enumerate(st.session_state.search_result):
                         st.markdown(f"{i + 1}. [{result['title']}]({result['href']})")
@@ -345,6 +345,26 @@ class BackendInteractionLogic:
                 st.session_state.current_log_filename = new_filename
 
     async def user_input(self, prompt):
+        st.markdown("""
+                                    <style>
+                                    .stChatMessage[data-testid="stChatMessage"] {
+                                        background-color: #fdfdf8 !important;
+                                        border-radius: 8px;
+                                        margin: 5px 0;
+                                        padding: 10px;
+                                    }
+
+                                    .stChatMessage[data-testid="stChatMessage"] p {
+                                        font-size: 24px !important;
+                                    }
+
+                                    [data-testid="stChatMessage"]:has([aria-label="Chat message from user"]) {
+                                            flex-direction: row-reverse;
+                                            text-align: right;
+                                        }
+
+                                    </style>
+                                    """, unsafe_allow_html=True)
         st.session_state.token_counter = st.empty()
         st.session_state.prompt = prompt
         st.session_state.current_prompt = {"role": "user", "content": st.session_state.prompt}
