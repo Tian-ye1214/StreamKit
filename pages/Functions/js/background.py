@@ -1,182 +1,181 @@
 import streamlit as st
 
-particles_js = """<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Particles.js</title>
-  <style>
-  html, body {
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
-    width: 100%;
-    height: 100%;
-  }
-  
-  #particles-js {
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: #000;
-    z-index: -1;
-  }
-  
-  /* 确保canvas可以接收鼠标事件 */
-  canvas {
-    pointer-events: auto !important;
-  }
-</style>
-</head>
-<body>
-  <div id="particles-js"></div>
-  <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
-  <script>
-    window.onload = function() {
-      initParticles();
-    };
-    
-    function initParticles() {
-      particlesJS("particles-js", {
-        "particles": {
-          "number": {
-            "value": 80,
-            "density": {
-              "enable": true,
-              "value_area": 800
-            }
-          },
-          "color": {
-            "value": "#ffffff"
-          },
-          "shape": {
-            "type": "circle",
-            "stroke": {
-              "width": 0,
-              "color": "#000000"
-            },
-            "polygon": {
-              "nb_sides": 5
-            }
-          },
-          "opacity": {
-            "value": 0.5,
-            "random": false,
-            "anim": {
-              "enable": false,
-              "speed": 1,
-              "opacity_min": 0.1,
-              "sync": false
-            }
-          },
-          "size": {
-            "value": 3,
-            "random": true,
-            "anim": {
-              "enable": false,
-              "speed": 40,
-              "size_min": 0.1,
-              "sync": false
-            }
-          },
-          "line_linked": {
-            "enable": true,
-            "distance": 150,
-            "color": "#ffffff",
-            "opacity": 0.4,
-            "width": 1
-          },
-          "move": {
-            "enable": true,
-            "speed": 2,
-            "direction": "none",
-            "random": false,
-            "straight": false,
-            "out_mode": "out",
-            "bounce": false,
-            "attract": {
-              "enable": false,
-              "rotateX": 600,
-              "rotateY": 1200
-            }
-          }
-        },
-        "interactivity": {
-          "detect_on": "canvas",
-          "events": {
-            "onhover": {
-              "enable": true,
-              "mode": "grab"
-            },
-            "onclick": {
-              "enable": true,
-              "mode": "push"
-            },
-            "resize": true
-          },
-          "modes": {
-            "grab": {
-              "distance": 140,
+
+def HomePagePartical():
+    particles_js = """<!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Particles.js</title>
+      <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        width: 100%;
+        height: 100%;
+      }
+
+      #particles-js {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #000;
+        z-index: -1;
+      }
+
+      /* 确保canvas可以接收鼠标事件 */
+      canvas {
+        pointer-events: auto !important;
+      }
+    </style>
+    </head>
+    <body>
+      <div id="particles-js"></div>
+      <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
+      <script>
+        window.onload = function() {
+          initParticles();
+        };
+
+        function initParticles() {
+          particlesJS("particles-js", {
+            "particles": {
+              "number": {
+                "value": 80,
+                "density": {
+                  "enable": true,
+                  "value_area": 800
+                }
+              },
+              "color": {
+                "value": "#ffffff"
+              },
+              "shape": {
+                "type": "circle",
+                "stroke": {
+                  "width": 0,
+                  "color": "#000000"
+                },
+                "polygon": {
+                  "nb_sides": 5
+                }
+              },
+              "opacity": {
+                "value": 0.5,
+                "random": false,
+                "anim": {
+                  "enable": false,
+                  "speed": 1,
+                  "opacity_min": 0.1,
+                  "sync": false
+                }
+              },
+              "size": {
+                "value": 3,
+                "random": true,
+                "anim": {
+                  "enable": false,
+                  "speed": 40,
+                  "size_min": 0.1,
+                  "sync": false
+                }
+              },
               "line_linked": {
-                "opacity": 1
+                "enable": true,
+                "distance": 150,
+                "color": "#ffffff",
+                "opacity": 0.4,
+                "width": 1
+              },
+              "move": {
+                "enable": true,
+                "speed": 2,
+                "direction": "none",
+                "random": false,
+                "straight": false,
+                "out_mode": "out",
+                "bounce": false,
+                "attract": {
+                  "enable": false,
+                  "rotateX": 600,
+                  "rotateY": 1200
+                }
               }
             },
-            "bubble": {
-              "distance": 400,
-              "size": 40,
-              "duration": 2,
-              "opacity": 8,
-              "speed": 3
+            "interactivity": {
+              "detect_on": "canvas",
+              "events": {
+                "onhover": {
+                  "enable": true,
+                  "mode": "grab"
+                },
+                "onclick": {
+                  "enable": true,
+                  "mode": "push"
+                },
+                "resize": true
+              },
+              "modes": {
+                "grab": {
+                  "distance": 140,
+                  "line_linked": {
+                    "opacity": 1
+                  }
+                },
+                "bubble": {
+                  "distance": 400,
+                  "size": 40,
+                  "duration": 2,
+                  "opacity": 8,
+                  "speed": 3
+                },
+                "repulse": {
+                  "distance": 200,
+                  "duration": 0.4
+                },
+                "push": {
+                  "particles_nb": 4
+                },
+                "remove": {
+                  "particles_nb": 2
+                }
+              }
             },
-            "repulse": {
-              "distance": 200,
-              "duration": 0.4
-            },
-            "push": {
-              "particles_nb": 4
-            },
-            "remove": {
-              "particles_nb": 2
+            "retina_detect": true
+          });
+
+          function resizeCanvas() {
+            const canvas = document.querySelector('#particles-js canvas');
+            if (canvas) {
+              canvas.width = window.innerWidth;
+              canvas.height = window.innerHeight;
+
+              canvas.style.pointerEvents = 'auto';
             }
           }
-        },
-        "retina_detect": true
-      });
 
-      function resizeCanvas() {
-        const canvas = document.querySelector('#particles-js canvas');
-        if (canvas) {
-          canvas.width = window.innerWidth;
-          canvas.height = window.innerHeight;
-          
-          canvas.style.pointerEvents = 'auto';
+          resizeCanvas();
+
+          window.addEventListener('resize', resizeCanvas);
+
+          try {
+            window.parent.postMessage('particles-loaded', '*');
+          } catch (e) {
+            console.error('无法发送消息到父窗口:', e);
+          }
+
+          console.log('粒子效果已初始化');
         }
-      }
-      
-      resizeCanvas();
-      
-      window.addEventListener('resize', resizeCanvas);
-      
-      try {
-        window.parent.postMessage('particles-loaded', '*');
-      } catch (e) {
-        console.error('无法发送消息到父窗口:', e);
-      }
-      
-      console.log('粒子效果已初始化');
-    }
-  </script>
-</body>
-</html>
-"""
-
-
-def particles():
+      </script>
+    </body>
+    </html>
+    """
     st.markdown("""
     <style>
         .stApp {
@@ -225,6 +224,5 @@ def particles():
         }
     </style>
     """, unsafe_allow_html=True)
-
     st.components.v1.html(particles_js, height=2000, width=2000)
     st.markdown('<div class="content-overlay"></div>', unsafe_allow_html=True)
