@@ -1,6 +1,4 @@
 # -*- coding: utf-8 -*-
-import asyncio
-
 import streamlit as st
 from streamlit_image_coordinates import streamlit_image_coordinates
 import numpy as np
@@ -14,7 +12,7 @@ import torch
 from transformers import AutoProcessor, AutoModelForZeroShotObjectDetection
 
 
-async def initialization():
+def initialization():
     if "dino" not in st.session_state:
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         model_path = os.path.join(base_dir, "pages/ModelCheckpoint/GroundingDINO-T")
@@ -47,9 +45,7 @@ async def initialization():
         st.session_state.box_coordinates = None
 
 
-async def get_rectangle_coords(
-        points: tuple[tuple[int, int], tuple[int, int]],
-) -> tuple[int, int, int, int]:
+def get_rectangle_coords(points: tuple[tuple[int, int], tuple[int, int]],) -> tuple[int, int, int, int]:
     point1, point2 = points
     minx = min(point1[0], point2[0])
     miny = min(point1[1], point2[1])
@@ -63,7 +59,7 @@ async def get_rectangle_coords(
     )
 
 
-async def resize_image_if_needed(image):
+def resize_image_if_needed(image):
     """
     如果图像尺寸过大，则使用双线性插值调整大小
     """
@@ -85,15 +81,14 @@ async def resize_image_if_needed(image):
     return np.array(image)
 
 
-async def point_inference():
+def point_inference():
     if st.session_state.current_image is not None:
         st.markdown("### 点击掩码生成")
         if st.session_state.latest_masks is not None:
-            masked_image = await st.session_state.SAM2.show_mask(st.session_state.latest_masks,
-                                                                 image=st.session_state.current_image)
+            masked_image = st.session_state.SAM2.show_mask(st.session_state.latest_masks, image=st.session_state.current_image)
         else:
             masked_image = st.session_state.current_image
-        display_image = await st.session_state.SAM2.show_points(masked_image, st.session_state.clicks)
+        display_image = st.session_state.SAM2.show_points(masked_image, st.session_state.clicks)
         try:
             coords = streamlit_image_coordinates(
                 display_image,
@@ -119,14 +114,14 @@ async def point_inference():
                 st.session_state.input_point.append([actual_x, actual_y])
                 st.session_state.input_label.append(st.session_state.current_marker)
 
-                masks = await st.session_state.SAM2.point_and_box_inference(st.session_state.current_image,
+                masks = st.session_state.SAM2.point_and_box_inference(st.session_state.current_image,
                                                                             np.array(st.session_state.input_point),
                                                                             np.array(st.session_state.input_label),
                                                                             None)
                 st.session_state.latest_masks = (masks[0] * 255)
                 st.session_state.masks_image = Image.fromarray(st.session_state.latest_masks.astype(np.uint8))
                 st.session_state.combine_image = Image.fromarray(
-                    await st.session_state.SAM2.show_mask(
+                    st.session_state.SAM2.show_mask(
                         st.session_state.latest_masks, image=st.session_state.current_image
                     )
                 )
@@ -138,7 +133,7 @@ async def point_inference():
             st.error(f"生成分割内容出错: {str(e)}")
 
 
-async def box_inference():
+def box_inference():
     if st.session_state.current_image is not None:
         if st.session_state.combine_image:
             masked_image = np.array(st.session_state.combine_image)
@@ -148,7 +143,7 @@ async def box_inference():
         draw = ImageDraw.Draw(img)
 
         if st.session_state.box_coordinates:
-            coords = await get_rectangle_coords(st.session_state.box_coordinates)
+            coords = get_rectangle_coords(st.session_state.box_coordinates)
             draw.rectangle(coords, fill=None, outline="red", width=2)
 
         st.markdown("### 框选目标区域")
@@ -168,13 +163,13 @@ async def box_inference():
                     st.session_state.box_coordinates != (point1, point2)):
                 st.session_state.box_coordinates = (point1, point2)
 
-                box_coords = await get_rectangle_coords(st.session_state.box_coordinates)
+                box_coords = get_rectangle_coords(st.session_state.box_coordinates)
 
                 try:
                     with st.spinner("正在生成分割结果..."):
                         st.session_state.box_input.append([box_coords[0], box_coords[1], box_coords[2], box_coords[3]])
 
-                        masks = await st.session_state.SAM2.point_and_box_inference(st.session_state.current_image,
+                        masks = st.session_state.SAM2.point_and_box_inference(st.session_state.current_image,
                                                                                     None,
                                                                                     None,
                                                                                     np.array(
@@ -192,7 +187,7 @@ async def box_inference():
                             st.session_state.masks_image = Image.fromarray(
                                 st.session_state.latest_masks.astype(np.uint8))
                         st.session_state.combine_image = Image.fromarray(
-                            await st.session_state.SAM2.show_mask(
+                            st.session_state.SAM2.show_mask(
                                 st.session_state.latest_masks, image=set_image
                             )
                         )
@@ -201,7 +196,7 @@ async def box_inference():
                     st.error(f"框选分割出错: {str(e)}")
 
 
-async def auto_masks_generator():
+def auto_masks_generator():
     auto_masks = None
     try:
         if st.session_state.current_image is not None:
@@ -213,10 +208,10 @@ async def auto_masks_generator():
 
             if st.button("生成全图掩码", help="自动生成全图所有物体的掩码"):
                 with st.spinner("正在生成全图掩码..."):
-                    auto_masks = await st.session_state.SAM2.auto_mask_genarator(st.session_state.current_image)
+                    auto_masks = st.session_state.SAM2.auto_mask_genarator(st.session_state.current_image)
 
             if auto_masks is not None:
-                combined_mask = await st.session_state.SAM2.show_masks(st.session_state.current_image, auto_masks)
+                combined_mask = st.session_state.SAM2.show_masks(st.session_state.current_image, auto_masks)
                 st.session_state.masks_image = Image.fromarray(combined_mask)
                 blended = cv2.addWeighted(st.session_state.current_image, 0.8,
                                           combined_mask[..., :3], 0.8, 0)
@@ -226,7 +221,7 @@ async def auto_masks_generator():
         st.error(f"生成分割内容出错: {str(e)}")
 
 
-async def inference_with_nature_language():
+def inference_with_nature_language():
     box_list = []
     if st.session_state.current_image is not None:
         if st.session_state.combine_image:
@@ -263,7 +258,7 @@ async def inference_with_nature_language():
                 else:
                     st.info(f'检测到目标位置：{box_list}')
             with st.spinner('开始分割'):
-                masks = await st.session_state.SAM2.point_and_box_inference(masked_image, input_box=np.array(box_list))
+                masks = st.session_state.SAM2.point_and_box_inference(masked_image, input_box=np.array(box_list))
                 all_masks = np.zeros(masked_image.size[::-1], dtype=np.float32)
                 if len(masks.shape) == 4:
                     for mask in masks:
@@ -275,12 +270,12 @@ async def inference_with_nature_language():
                 st.session_state.masks_image = Image.fromarray(all_masks)
                 st.session_state.latest_masks = all_masks
                 st.session_state.combine_image = Image.fromarray(
-                    await st.session_state.SAM2.show_mask(st.session_state.latest_masks, image=np.array(masked_image))
+                    st.session_state.SAM2.show_mask(st.session_state.latest_masks, image=np.array(masked_image))
                 )
                 st.rerun()
 
 
-async def clear_all():
+def clear_all():
     st.session_state.clicks = []
     st.session_state.input_point = []
     st.session_state.input_label = []
@@ -290,8 +285,8 @@ async def clear_all():
     st.session_state.box_coordinates = None
 
 
-async def main():
-    await initialization()
+def main():
+    initialization()
     st.markdown("""
     <h1 style='text-align: center;'>
         SAM2.1交互式语义分割
@@ -327,10 +322,10 @@ async def main():
 
         current_file_hash = hash(file_bytes)
         if "previous_file_hash" not in st.session_state or st.session_state.previous_file_hash != current_file_hash:
-            await clear_all()
+            clear_all()
             st.session_state.previous_file_hash = current_file_hash
 
-        st.session_state.current_image = await resize_image_if_needed(Image.open(uploaded_file).convert("RGB"))
+        st.session_state.current_image = resize_image_if_needed(Image.open(uploaded_file).convert("RGB"))
     else:
         st.warning('请上传图片')
         return
@@ -338,16 +333,13 @@ async def main():
     tab1, tab2, tab3, tab4 = st.tabs(
         ['Point inference', 'Box inference', 'Auto Masks Generation', 'Inference with natural language'])
     with tab1:
-        await point_inference()
-
+        point_inference()
     with tab2:
-        await box_inference()
-
+        box_inference()
     with tab3:
-        await auto_masks_generator()
-
+        auto_masks_generator()
     with tab4:
-        await inference_with_nature_language()
+        inference_with_nature_language()
 
     with st.sidebar:
         marker_type = st.radio(
@@ -380,7 +372,7 @@ async def main():
             ])
         ), unsafe_allow_html=True)
         if st.button("清除所有记录"):
-            await clear_all()
+            clear_all()
             st.rerun()
 
         if st.session_state.combine_image is not None:
@@ -415,5 +407,4 @@ current_page = 'SAM2'
 if current_page != st.session_state.previous_page:
     st.session_state.clear()
     st.session_state.previous_page = current_page
-asyncio.run(main())
-
+main()
