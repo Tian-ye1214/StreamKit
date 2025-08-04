@@ -8,7 +8,7 @@ from pdf2zh.doclayout import OnnxModel
 import asyncio
 
 
-async def translate_pdf(file, lang_in="en", lang_out="zh", service="google", thread=4, api_key=None, base_url=None,
+def translate_pdf(file, lang_in="en", lang_out="zh", service="google", thread=4, api_key=None, base_url=None,
                   model=None):
     """使用pdf2zh翻译PDF文件"""
     try:
@@ -71,7 +71,7 @@ def display_pdf(file, prefix=""):
     )
 
 
-async def main():
+def main():
     if 'mono_result' not in st.session_state:
         st.session_state.mono_result = None
     if 'dual_result' not in st.session_state:
@@ -212,7 +212,7 @@ async def main():
                 lang_in = lang_code_map[source_language]
                 lang_out = lang_code_map[target_language]
 
-                mono_result, dual_result = asyncio.gather(translate_pdf(
+                mono_result, dual_result = translate_pdf(
                     file=uploaded_file,
                     lang_in=lang_in,
                     lang_out=lang_out,
@@ -221,7 +221,7 @@ async def main():
                     api_key=api_key if 'api_key' in locals() else None,
                     base_url=base_url if 'base_url' in locals() else None,
                     model=model if 'model' in locals() else None
-                ))
+                )
                 st.session_state.mono_result = mono_result
                 st.session_state.dual_result = dual_result
                 st.rerun()
@@ -235,4 +235,4 @@ current_page = 'PDFTranslator'
 if current_page != st.session_state.previous_page:
     st.session_state.clear()
     st.session_state.previous_page = current_page
-asyncio.run(main())
+main()
