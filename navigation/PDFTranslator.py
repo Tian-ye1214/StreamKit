@@ -35,7 +35,7 @@ async def translate_pdf(file, lang_in="en", lang_out="zh", service="google", thr
         return None, None
 
 
-async def display_pdf(file, prefix=""):
+def display_pdf(file, prefix=""):
     """显示PDF文件
     Args:
         file: PDF文件字节流
@@ -162,13 +162,11 @@ async def main():
         4. 实时预览对比翻译效果
         5. 下载单语/双语版本
 
-        <div style="background: #FCF3CF; padding: 15px; border-radius: 5px; margin-top: 20px;">
-            📑 典型应用场景：<br>
-            • 技术文档多语言本地化<br>
-            • 学术论文格式保持翻译<br>
-            • 商业合同精准术语转换<br>
-            每次翻译都是专业级输出！
-        </div>
+        📑 典型应用场景：<br>
+        • 技术文档多语言本地化<br>
+        • 学术论文格式保持翻译<br>
+        • 商业合同精准术语转换<br>
+        每次翻译都是专业级输出！
         """, unsafe_allow_html=True)
 
     if uploaded_file:
@@ -176,12 +174,12 @@ async def main():
 
         with col1:
             st.markdown("### 原文")
-            await display_pdf(uploaded_file.getvalue(), prefix="original")
+            display_pdf(uploaded_file.getvalue(), prefix="original")
 
         with col2:
             st.markdown("### 译文")
             if st.session_state.mono_result is not None:
-                await display_pdf(st.session_state.mono_result, prefix="translated")
+                display_pdf(st.session_state.mono_result, prefix="translated")
 
                 st.success("翻译完成！请选择下载版本：")
                 download_col1, download_col2 = st.columns(2)
@@ -214,7 +212,7 @@ async def main():
                 lang_in = lang_code_map[source_language]
                 lang_out = lang_code_map[target_language]
 
-                mono_result, dual_result = await translate_pdf(
+                mono_result, dual_result = asyncio.gather(translate_pdf(
                     file=uploaded_file,
                     lang_in=lang_in,
                     lang_out=lang_out,
@@ -223,7 +221,7 @@ async def main():
                     api_key=api_key if 'api_key' in locals() else None,
                     base_url=base_url if 'base_url' in locals() else None,
                     model=model if 'model' in locals() else None
-                )
+                ))
                 st.session_state.mono_result = mono_result
                 st.session_state.dual_result = dual_result
                 st.rerun()
