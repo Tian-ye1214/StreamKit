@@ -13,6 +13,7 @@ from pages.Functions.CallLLM import CallLLM
 import re
 import asyncio
 
+
 kb_manager = KnowledgeBaseManager()
 
 
@@ -43,12 +44,9 @@ class RAG:
                 instruction=instruction, query=query, doc=doc)
         return output
 
-    # 1. 定义 embedding 函数
     async def hf_embed(self, texts: list[str], tokenizer, embed_model) -> np.ndarray:
         texts_with_instruct = [self.format_instruction(None, text, None, 'embedding') for text in texts]
-        encoded_texts = tokenizer(
-            texts_with_instruct, return_tensors="pt", padding=True, truncation=True, max_length=8192
-        ).to(self.DEVICE)
+        encoded_texts = tokenizer(texts_with_instruct, return_tensors="pt", padding=True, truncation=True, max_length=8192).to(self.DEVICE)
         with torch.no_grad():
             outputs = embed_model(
                 input_ids=encoded_texts["input_ids"],
@@ -61,9 +59,7 @@ class RAG:
         else:
             return embeddings.detach().cpu().numpy()
 
-    # 2. 文本切割函数
-    async def split_text(self, text, chunk_size=1024, special_chars=None, overlap=128):
-        # 先按特殊字符分割
+    def split_text(self, text, chunk_size=1024, special_chars=None, overlap=128):
         if special_chars:
             segments = []
             current_pos = 0
@@ -100,25 +96,21 @@ class RAG:
                     start = max(0, start - overlap)
             return chunks
 
-    # 3. 计算文件 hash
-    async def file_hash(self, file_bytes):
+    def file_hash(self, file_bytes):
         return hashlib.md5(file_bytes).hexdigest()
 
-    # 4. 加载模型函数
-    async def load_embedding_model(self):
-        tokenizer = AutoTokenizer.from_pretrained(self.embedding_model_path)
-        embed_model = AutoModel.from_pretrained(self.embedding_model_path, torch_dtype=torch.bfloat16)
+    def load_embedding_model(self):
+        tokenizer = AutoTokenizer.from_pretrained(self.embedding_model_path, use_fast=True)
+        embed_model = AutoModel.from_pretrained(self.embedding_model_path, torch_dtype=torch.bfloat16, low_cpu_mem_usage=True)
         embed_model.eval()
         embed_model.to(self.DEVICE)
         return tokenizer, embed_model
 
-    # 5. 加载rerank模型函数
-    async def load_rerank_model(self):
-        tokenizer = AutoTokenizer.from_pretrained(self.rerank_model_path, padding_side='left')
-        model = AutoModelForCausalLM.from_pretrained(self.rerank_model_path, torch_dtype=torch.bfloat16)
+    def load_rerank_model(self):
+        tokenizer = AutoTokenizer.from_pretrained(self.rerank_model_path, padding_side='left', use_fast=True)
+        model = AutoModelForCausalLM.from_pretrained(self.rerank_model_path, torch_dtype=torch.bfloat16, low_cpu_mem_usage=True)
         model.eval()
         model.to(self.DEVICE)
-        # 初始化特殊token
         self.token_false_id = tokenizer.convert_tokens_to_ids("no")
         self.token_true_id = tokenizer.convert_tokens_to_ids("yes")
 
@@ -151,18 +143,15 @@ class RAG:
         scores = batch_scores[:, 1].exp().tolist()
         return scores
 
-    # 6. 使用rerank模型重排序
-    async def rerank_results(self, query, results, tokenizer, model, top_k):
+    def rerank_results(self, query, results, tokenizer, model, top_k):
         if not results:
             return []
-        # 准备输入对
         pairs = [self.format_instruction(None, query, result["text"], type='rerank') for result in results]
 
         with torch.no_grad():
             inputs = self.process_inputs(pairs, tokenizer)
             scores = self.compute_logits(inputs, model)
 
-        # 更新结果分数并排序
         for i, score in enumerate(scores):
             results[i]["rerank_score"] = float(score)
         results.sort(key=lambda x: x["rerank_score"], reverse=True)
@@ -171,11 +160,9 @@ class RAG:
 
     async def retrieval_from_kb(self, kb, query_embedding, all_results):
         data = await kb_manager.get_knowledge_base(st.session_state.current_user, kb['file_id'])
-        # 计算相似度
         embeddings = np.array([item["embedding"] for item in data])
         similarities = cosine_similarity([query_embedding], embeddings)[0]
 
-        # 将结果添加到列表
         for i, similarity in enumerate(similarities):
             all_results.append({
                 "text": data[i]["text"],
@@ -196,15 +183,13 @@ class RAG:
 
         if st.session_state.use_rerank:
             with st.spinner("正在使用Rerank模型重排序..."):
-                rerank_tokenizer, rerank_model = await self.load_rerank_model()
+                rerank_tokenizer, rerank_model = self.load_rerank_model()
                 candidate_results = self.all_results[:min(st.session_state.top_k * 3, len(self.all_results))]
-                top_results = await self.rerank_results(user_input, candidate_results, rerank_tokenizer,
-                                                        rerank_model,
-                                                        st.session_state.top_k)
+                top_results = self.rerank_results(user_input, candidate_results, rerank_tokenizer, rerank_model, st.session_state.top_k)
         return top_results
 
 
-async def initialization(rag_system):
+def initialization(rag_system):
     if "chunk_size" not in st.session_state:
         st.session_state.chunk_size = 1024
     if "overlap" not in st.session_state:
@@ -224,7 +209,7 @@ async def initialization(rag_system):
     if 'selected_model' not in st.session_state:
         st.session_state.selected_model = "deepseek-chat"
     if 'embed_model' not in st.session_state:
-        st.session_state.tokenizer, st.session_state.embed_model = await rag_system.load_embedding_model()
+        st.session_state.tokenizer, st.session_state.embed_model = rag_system.load_embedding_model()
     if 'intent' not in st.session_state:
         st.session_state.intent = False
 
@@ -269,12 +254,12 @@ async def RAG_base(rag_system):
 
 async def processing_file(rag_system, uploaded_file):
     st.write(f"正在处理文件: {uploaded_file.name}")
-    file_id = await rag_system.file_hash(uploaded_file.read())
+    file_id = rag_system.file_hash(uploaded_file.read())
 
     existing_kb = await kb_manager.get_knowledge_base(st.session_state.current_user, file_id)
     if not existing_kb:
         text = await extract_text(uploaded_file)
-        chunks = await rag_system.split_text(text, chunk_size=st.session_state.chunk_size,
+        chunks = rag_system.split_text(text, chunk_size=st.session_state.chunk_size,
                                              special_chars=st.session_state.special_chars,
                                              overlap=st.session_state.overlap)
         st.write(f"文档 {uploaded_file.name} 被切割为 {len(chunks)} 段。")
@@ -318,7 +303,7 @@ async def rag_with_ai(rag_system):
                     "messages": Intentmessage,
                     "temperature": 0.6,
                     "max_tokens": 8192,
-                    "response_format": {"type": "json_object"},
+                    "response_format": {"type": "json_object"}
                 }
                 response = await st.session_state.Client.call(reason_placeholder, message_placeholder, True, **model_parameter)
                 user_intents = json.loads(response)
@@ -428,7 +413,7 @@ async def main():
     """, unsafe_allow_html=True)
     rag_system = RAG(embedding_model_path='pages/ModelCheckpoint/Qwen3-embedding',
                      rerank_model_path='pages/ModelCheckpoint/Qwen3-rerank')
-    await initialization(rag_system)
+    initialization(rag_system)
 
     with st.expander("📖 项目说明", expanded=False):
         st.markdown("""
@@ -529,4 +514,3 @@ if current_page != st.session_state.previous_page:
     st.session_state.clear()
     st.session_state.previous_page = current_page
 asyncio.run(main())
-
