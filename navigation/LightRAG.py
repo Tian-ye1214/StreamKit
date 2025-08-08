@@ -6,15 +6,17 @@ import networkx as nx
 from pyvis.network import Network
 from pages.lightrag.llm.openai import openai_complete_if_cache
 from pages.lightrag.llm.siliconcloud import siliconcloud_embedding
+from pages.lightrag import LightRAG, QueryParam
+from pages.lightrag.utils import EmbeddingFunc, logger, set_verbose_debug
+from pages.lightrag.kg.shared_storage import initialize_pipeline_status
+from pages.lightrag.rerank import custom_rerank
 from pages.Functions.ExtractFileContents import extract_text
-from pages.Functions.Constants import EMBEDDING_MODEL_MAPPING, HIGHSPEED_MODEL_MAPPING, EMBEDDING_DIM
+from pages.Functions.Constants import EMBEDDING_MODEL_MAPPING, HIGHSPEED_MODEL_MAPPING, EMBEDDING_DIM, \
+    RERANKER_MODEL_MAPPING
 import os
 import asyncio
 import logging
 import logging.config
-from pages.lightrag import LightRAG, QueryParam
-from pages.lightrag.utils import EmbeddingFunc, logger, set_verbose_debug
-from pages.lightrag.kg.shared_storage import initialize_pipeline_status
 
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
@@ -24,6 +26,25 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+
+def initialize():
+    if "llm_model" not in st.session_state:
+        st.session_state.llm_model = 'deepseek-chat'
+    if "embedding_model" not in st.session_state:
+        st.session_state.embed_model = 'Qwen/Qwen3-Embedding-8B'
+    if "reranker_model" not in st.session_state:
+        st.session_state.embed_model = 'Qwen/Qwen3-Reranker-8B'
+    if "embed_dim" not in st.session_state:
+        st.session_state.embed_dim = 4096
+    if "rag_messages" not in st.session_state:
+        st.session_state.rag_messages = []
+    if 'has_document' not in st.session_state:
+        st.session_state.has_document = False
+    if 'current_query_nodes' not in st.session_state:
+        st.session_state.current_query_nodes = []
+    if 'current_query_edges' not in st.session_state:
+        st.session_state.current_query_edges = []
 
 
 def configure_logging():
@@ -104,15 +125,17 @@ async def llm_model_func(prompt, system_prompt=None, history_messages=[], **kwar
     )
 
 
-def get_user_working_dir(filename=None):
-    base_dir = "user_workspaces"
-    os.makedirs(base_dir, exist_ok=True)
-
-    if not filename:
-        raise ValueError("必须提供文件名来创建工作目录")
-
-    dirname = os.path.splitext(filename)[0]
-    return os.path.join(base_dir, dirname)
+async def my_rerank_func(query: str, documents: list, top_n: int = None, **kwargs):
+    reranker_model = st.session_state.get('reranker_model')
+    return await custom_rerank(
+        query=query,
+        documents=documents,
+        model=reranker_model,
+        base_url="https://api.siliconflow.cn/v1/rerank",
+        api_key=os.environ.get('SiliconFlow_API_KEY'),
+        top_n=top_n or 10,
+        **kwargs,
+    )
 
 
 async def init_rag(filename=None):
@@ -139,12 +162,24 @@ async def init_rag(filename=None):
                 api_key=os.environ.get('SiliconFlow_API_KEY')
             ),
         ),
+        rerank_model_func=my_rerank_func,
         addon_params={"language": "Simplified Chinese"},
     )
     await rag.initialize_storages()
     await initialize_pipeline_status()
 
     return rag
+
+
+def get_user_working_dir(filename=None):
+    base_dir = "user_workspaces"
+    os.makedirs(base_dir, exist_ok=True)
+
+    if not filename:
+        raise ValueError("必须提供文件名来创建工作目录")
+
+    dirname = os.path.splitext(filename)[0]
+    return os.path.join(base_dir, dirname)
 
 
 def process_grpah(G):
@@ -259,6 +294,53 @@ def display_knowledge_graph(working_dir, show_isolated=False):
         st.info("暂无知图谱数据")
 
 
+def create_current_query_subgraph():
+    """创建当前查询的子图谱并展示"""
+    st.subheader("🔍 当前查询图谱")
+    if not st.session_state.current_query_nodes and not st.session_state.current_query_edges:
+        st.info("暂无查询图谱数据，请先进行查询")
+        return
+
+    try:
+        G = nx.Graph()
+        if st.session_state.current_query_nodes:
+            for node_data in st.session_state.current_query_nodes:
+                G.add_node(
+                    str(node_data["id"]),
+                    label=node_data["entity"],
+                    entity_type=node_data["type"],
+                    description=node_data["description"],
+                    created_at=node_data["created_at"],
+                    file_path=node_data["file_path"]
+                )
+
+        if st.session_state.current_query_edges:
+            for edge_data in st.session_state.current_query_edges:
+                edge_id = str(edge_data["id"])
+                entity1_id = str(edge_data["entity1"])
+                entity2_id = str(edge_data["entity2"])
+
+                G.add_edge(
+                    entity1_id,
+                    entity2_id,
+                    id=edge_id,
+                    description=edge_data["description"],
+                    created_at=edge_data["created_at"],
+                    file_path=edge_data["file_path"]
+                )
+
+        if len(G.nodes) == 0:
+            st.info("图谱中没有节点")
+            return
+
+        html_content = process_grpah(G)
+        st.components.v1.html(html_content, height=800)
+
+    except Exception as e:
+        st.error(f"创建查询图谱时发生错误: {str(e)}")
+        st.exception(e)
+
+
 async def _process_uploaded_file(uploaded_file):
     with st.spinner('正在处理文档(首次处理文档会比较慢，请耐心等待哦)...'):
         current_file = st.session_state.get('current_file', None)
@@ -287,74 +369,6 @@ async def print_stream(stream, placeholder):
             content += chunk
             placeholder.markdown(content)
     return content
-
-
-def initialize():
-    if "llm_model" not in st.session_state:
-        st.session_state.llm_model = 'deepseek-chat'
-    if "embedding_model" not in st.session_state:
-        st.session_state.embed_model = 'Qwen/Qwen3-Embedding-8B'
-    if "embed_dim" not in st.session_state:
-        st.session_state.embed_dim = 4096
-    if "rag_messages" not in st.session_state:
-        st.session_state.rag_messages = []
-    if 'has_document' not in st.session_state:
-        st.session_state.has_document = False
-    if 'current_query_nodes' not in st.session_state:
-        st.session_state.current_query_nodes = []
-    if 'current_query_edges' not in st.session_state:
-        st.session_state.current_query_edges = []
-
-
-def create_current_query_subgraph():
-    """创建当前查询的子图谱并展示"""
-    st.subheader("🔍 当前查询图谱")
-    if not st.session_state.current_query_nodes and not st.session_state.current_query_edges:
-        st.info("暂无查询图谱数据，请先进行查询")
-        return
-    
-    try:
-        G = nx.Graph()
-        if st.session_state.current_query_nodes:
-            for node_data in st.session_state.current_query_nodes:
-                G.add_node(
-                    str(node_data["id"]),
-                    label=node_data["entity"],
-                    entity_type=node_data["type"],
-                    description=node_data["description"],
-                    rank=node_data["rank"],
-                    created_at=node_data["created_at"],
-                    file_path=node_data["file_path"]
-                )
-
-        if st.session_state.current_query_edges:
-            for edge_data in st.session_state.current_query_edges:
-                edge_id = str(edge_data["id"])
-                entity1_id = str(edge_data["entity1"])
-                entity2_id = str(edge_data["entity2"])
-                
-                G.add_edge(
-                    entity1_id,
-                    entity2_id,
-                    id=edge_id,
-                    description=edge_data["description"],
-                    keywords=edge_data["keywords"],
-                    weight=edge_data["weight"],
-                    rank=edge_data["rank"],
-                    created_at=edge_data["created_at"],
-                    file_path=edge_data["file_path"]
-                )
-        
-        if len(G.nodes) == 0:
-            st.info("图谱中没有节点")
-            return
-
-        html_content = process_grpah(G)
-        st.components.v1.html(html_content, height=800)
-
-    except Exception as e:
-        st.error(f"创建查询图谱时发生错误: {str(e)}")
-        st.exception(e)
 
 
 async def main():
@@ -391,19 +405,26 @@ async def main():
             help="支持的格式：PDF、Excel文件(xlsx/xls)、文本文件(txt), Document文件(doc/docx)"
         )
 
-
         st.subheader("🤖 模型设置")
-        model_display = st.selectbox("选择模型",
+        model_display = st.selectbox("选择语言模型",
                                      list(HIGHSPEED_MODEL_MAPPING.keys()),
                                      index=0,
                                      help="选择模型",
                                      key="main_model_select")
 
-        emb_model_display = st.selectbox("选择模型",
+        emb_model_display = st.selectbox("选择嵌入模型",
                                          list(EMBEDDING_MODEL_MAPPING.keys()),
                                          index=0,
                                          help="选择用于文本向量化的模型",
                                          key="embed_model_select")
+        use_reranker = st.checkbox("是否启用重排序模型", value=False)
+        if use_reranker:
+            rerank_model_display = st.selectbox("选择重排序模型",
+                                                list(RERANKER_MODEL_MAPPING.keys()),
+                                                index=0,
+                                                help="选择用于文本向量化的模型",
+                                                key="reranker_model_select")
+            st.session_state.reranker_model = RERANKER_MODEL_MAPPING[rerank_model_display]
 
         st.session_state.llm_model = HIGHSPEED_MODEL_MAPPING[model_display]
         st.session_state.embed_model = EMBEDDING_MODEL_MAPPING[emb_model_display]
@@ -415,10 +436,9 @@ async def main():
         st.subheader("🔍 查询模式")
         query_mode = st.selectbox(
             "选择查询模式",
-            options=["naive", "local", "global", "hybrid", "mix"],
-            index=4,
-            help="""- naive: 朴素模式，直接匹配最相似的文本片段
-                    - local: 局部模式，匹配最相似的实体关系及邻接实体关系
+            options=["local", "global", "hybrid", "mix"],
+            index=3,
+            help="""- local: 局部模式，匹配最相似的实体关系及邻接实体关系
                     - global: 全局模式，匹配最相似的实体以及间接实体关系
                     - hybrid: local模式 + global模式
                     - mix: naive模式 + hybrid模式""",
@@ -437,12 +457,14 @@ async def main():
             )
             top_k = st.slider("检索数量(top_k)", min_value=1, max_value=120, value=10,
                               help="在local模式下表示检索的实体数量，在global模式下表示检索的关系数量")
-            max_token_for_text_unit = st.slider("文本单元最大token数", min_value=1000, max_value=8000, value=4000,
-                                                help="原始文本块的最大token数量")
-            max_token_for_global_context = st.slider("全局上下文最大token数", min_value=1000, max_value=8000,
-                                                     value=4000, help="关系描述的最大token数量")
-            max_token_for_local_context = st.slider("局部上下文最大token数", min_value=1000, max_value=8000, value=4000,
-                                                    help="实体描述的最大token数量")
+            chunk_top_k = st.slider("文档块检索数量", min_value=1, max_value=20, value=5,
+                                    help="在重排序模式下，经过重排序后返回文档块数量")
+            max_entity_tokens = st.slider("实体描述最大token数", min_value=5000, max_value=20000, value=8000,
+                                                help="描述实体的最大token数量")
+            max_relation_tokens = st.slider("关系描述最大token数", min_value=5000, max_value=8000,
+                                                     value=10000, help="描述关系的最大token数量")
+            max_total_tokens = st.slider("全局最大token数", min_value=10000, max_value=32768, value=30000,
+                                                    help="总体上下文最大token数量")
             show_isolated_nodes = st.toggle("显示孤立节点", value=False, help="开启后将显示没有任何连接的节点")
         st.subheader("🗑️ 清除历史")
         if st.button("清除对话历史"):
@@ -479,10 +501,12 @@ async def main():
                                 only_need_prompt=only_need_prompt,
                                 response_type=response_type,
                                 top_k=top_k,
-                                max_token_for_text_unit=max_token_for_text_unit,
-                                max_token_for_global_context=max_token_for_global_context,
-                                max_token_for_local_context=max_token_for_local_context,
+                                chunk_top_k=chunk_top_k,
+                                max_entity_tokens=max_entity_tokens,
+                                max_relation_tokens=max_relation_tokens,
+                                max_total_tokens=max_total_tokens,
                                 conversation_history=st.session_state.rag_messages,
+                                enable_rerank=use_reranker,
                                 stream=True
                             )
                         )
@@ -513,4 +537,3 @@ if current_page != st.session_state.previous_page:
     st.session_state.previous_page = current_page
 configure_logging()
 asyncio.run(main())
-
