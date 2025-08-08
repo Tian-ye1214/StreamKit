@@ -9,7 +9,9 @@ import logging
 import logging.handlers
 import os
 import re
+import uuid
 from dataclasses import dataclass
+from datetime import datetime
 from functools import wraps
 from hashlib import md5
 from typing import Any, Protocol, Callable, TYPE_CHECKING, List
@@ -19,6 +21,9 @@ from pages.lightrag.constants import (
     DEFAULT_LOG_MAX_BYTES,
     DEFAULT_LOG_BACKUP_COUNT,
     DEFAULT_LOG_FILENAME,
+    GRAPH_FIELD_SEP,
+    DEFAULT_MAX_TOTAL_TOKENS,
+    DEFAULT_MAX_FILE_PATH_LENGTH,
 )
 
 
@@ -55,7 +60,7 @@ def get_env_value(
 
 # Use TYPE_CHECKING to avoid circular imports
 if TYPE_CHECKING:
-    from pages.lightrag.base import BaseKVStorage
+    from pages.lightrag.base import BaseKVStorage, QueryParam
 
 # use the .env that is inside the current folder
 # allows to use different .env file for each lightrag instance
@@ -85,8 +90,10 @@ def verbose_debug(msg: str, *args, **kwargs):
             formatted_msg = msg
         # Then truncate the formatted message
         truncated_msg = (
-            formatted_msg[:100] + "..." if len(formatted_msg) > 100 else formatted_msg
+            formatted_msg[:150] + "..." if len(formatted_msg) > 150 else formatted_msg
         )
+        # Remove consecutive newlines
+        truncated_msg = re.sub(r"\n+", "\n", truncated_msg)
         logger.debug(truncated_msg, **kwargs)
 
 
@@ -116,6 +123,7 @@ class LightragPathFilter(logging.Filter):
         # Define paths to be filtered
         self.filtered_paths = [
             "/documents",
+            "/documents/paginated",
             "/health",
             "/webui/",
             "/documents/pipeline_status",
@@ -138,6 +146,7 @@ class LightragPathFilter(logging.Filter):
             # Filter out successful GET requests to filtered paths
             if (
                 method == "GET"
+                or method == "POST"
                 and (status == 200 or status == 304)
                 and path in self.filtered_paths
             ):
@@ -232,49 +241,11 @@ class UnlimitedSemaphore:
 @dataclass
 class EmbeddingFunc:
     embedding_dim: int
-    max_token_size: int
     func: callable
-    # concurrent_limit: int = 16
+    max_token_size: int | None = None  # deprecated keep it for compatible only
 
     async def __call__(self, *args, **kwargs) -> np.ndarray:
         return await self.func(*args, **kwargs)
-
-
-def locate_json_string_body_from_string(content: str) -> str | None:
-    """Locate the JSON string body from a string"""
-    try:
-        maybe_json_str = re.search(r"{.*}", content, re.DOTALL)
-        if maybe_json_str is not None:
-            maybe_json_str = maybe_json_str.group(0)
-            maybe_json_str = maybe_json_str.replace("\\n", "")
-            maybe_json_str = maybe_json_str.replace("\n", "")
-            maybe_json_str = maybe_json_str.replace("'", '"')
-            # json.loads(maybe_json_str) # don't check here, cannot validate schema after all
-            return maybe_json_str
-    except Exception:
-        pass
-        # try:
-        #     content = (
-        #         content.replace(kw_prompt[:-1], "")
-        #         .replace("user", "")
-        #         .replace("model", "")
-        #         .strip()
-        #     )
-        #     maybe_json_str = "{" + content.split("{")[1].split("}")[0] + "}"
-        #     json.loads(maybe_json_str)
-
-        return None
-
-
-def convert_response_to_json(response: str) -> dict[str, Any]:
-    json_str = locate_json_string_body_from_string(response)
-    assert json_str is not None, f"Unable to parse JSON from response: {response}"
-    try:
-        data = json.loads(json_str)
-        return data
-    except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse JSON: {json_str}")
-        raise e from None
 
 
 def compute_args_hash(*args: Any) -> str:
@@ -777,77 +748,12 @@ def truncate_list_by_token_size(
     return list_data
 
 
-def process_combine_contexts(*context_lists):
-    """
-    Combine multiple context lists and remove duplicate content
-
-    Args:
-        *context_lists: Any number of context lists
-
-    Returns:
-        Combined context list with duplicates removed
-    """
-    seen_content = {}
-    combined_data = []
-
-    # Iterate through all input context lists
-    for context_list in context_lists:
-        if not context_list:  # Skip empty lists
-            continue
-        for item in context_list:
-            content_dict = {k: v for k, v in item.items() if k != "id"}
-            content_key = tuple(sorted(content_dict.items()))
-            if content_key not in seen_content:
-                seen_content[content_key] = item
-                combined_data.append(item)
-
-    # Reassign IDs
-    for i, item in enumerate(combined_data):
-        item["id"] = str(i + 1)
-
-    return combined_data
-
-
 def cosine_similarity(v1, v2):
     """Calculate cosine similarity between two vectors"""
     dot_product = np.dot(v1, v2)
     norm1 = np.linalg.norm(v1)
     norm2 = np.linalg.norm(v2)
     return dot_product / (norm1 * norm2)
-
-
-def quantize_embedding(embedding: np.ndarray | list[float], bits: int = 8) -> tuple:
-    """Quantize embedding to specified bits"""
-    # Convert list to numpy array if needed
-    if isinstance(embedding, list):
-        embedding = np.array(embedding)
-
-    # Calculate min/max values for reconstruction
-    min_val = embedding.min()
-    max_val = embedding.max()
-
-    if min_val == max_val:
-        # handle constant vector
-        quantized = np.zeros_like(embedding, dtype=np.uint8)
-        return quantized, min_val, max_val
-
-    # Quantize to 0-255 range
-    scale = (2**bits - 1) / (max_val - min_val)
-    quantized = np.round((embedding - min_val) * scale).astype(np.uint8)
-
-    return quantized, min_val, max_val
-
-
-def dequantize_embedding(
-    quantized: np.ndarray, min_val: float, max_val: float, bits=8
-) -> np.ndarray:
-    """Restore quantized embedding"""
-    if min_val == max_val:
-        # handle constant vector
-        return np.full_like(quantized, min_val, dtype=np.float32)
-
-    scale = (max_val - min_val) / (2**bits - 1)
-    return (quantized * scale + min_val).astype(np.float32)
 
 
 async def handle_cache(
@@ -884,12 +790,10 @@ class CacheData:
     args_hash: str
     content: str
     prompt: str
-    quantized: np.ndarray | None = None
-    min_val: float | None = None
-    max_val: float | None = None
     mode: str = "default"
     cache_type: str = "query"
     chunk_id: str | None = None
+    queryparam: dict | None = None
 
 
 async def save_to_cache(hashing_kv, cache_data: CacheData):
@@ -926,15 +830,10 @@ async def save_to_cache(hashing_kv, cache_data: CacheData):
         "return": cache_data.content,
         "cache_type": cache_data.cache_type,
         "chunk_id": cache_data.chunk_id if cache_data.chunk_id is not None else None,
-        "embedding": cache_data.quantized.tobytes().hex()
-        if cache_data.quantized is not None
-        else None,
-        "embedding_shape": cache_data.quantized.shape
-        if cache_data.quantized is not None
-        else None,
-        "embedding_min": cache_data.min_val,
-        "embedding_max": cache_data.max_val,
         "original_prompt": cache_data.prompt,
+        "queryparam": cache_data.queryparam
+        if cache_data.queryparam is not None
+        else None,
     }
 
     logger.info(f" == LLM cache == saving: {flattened_key}")
@@ -1671,6 +1570,86 @@ def check_storage_env_vars(storage_name: str) -> None:
         )
 
 
+def linear_gradient_weighted_polling(
+    entities_or_relations: list[dict],
+    max_related_chunks: int,
+    min_related_chunks: int = 1,
+) -> list[str]:
+    """
+    Linear gradient weighted polling algorithm for text chunk selection.
+
+    This algorithm ensures that entities/relations with higher importance get more text chunks,
+    forming a linear decreasing allocation pattern.
+
+    Args:
+        entities_or_relations: List of entities or relations sorted by importance (high to low)
+        max_related_chunks: Expected number of text chunks for the highest importance entity/relation
+        min_related_chunks: Expected number of text chunks for the lowest importance entity/relation
+
+    Returns:
+        List of selected text chunk IDs
+    """
+    if not entities_or_relations:
+        return []
+
+    n = len(entities_or_relations)
+    if n == 1:
+        # Only one entity/relation, return its first max_related_chunks text chunks
+        entity_chunks = entities_or_relations[0].get("sorted_chunks", [])
+        return entity_chunks[:max_related_chunks]
+
+    # Calculate expected text chunk count for each position (linear decrease)
+    expected_counts = []
+    for i in range(n):
+        # Linear interpolation: from max_related_chunks to min_related_chunks
+        ratio = i / (n - 1) if n > 1 else 0
+        expected = max_related_chunks - ratio * (
+            max_related_chunks - min_related_chunks
+        )
+        expected_counts.append(int(round(expected)))
+
+    # First round allocation: allocate by expected values
+    selected_chunks = []
+    used_counts = []  # Track number of chunks used by each entity
+    total_remaining = 0  # Accumulate remaining quotas
+
+    for i, entity_rel in enumerate(entities_or_relations):
+        entity_chunks = entity_rel.get("sorted_chunks", [])
+        expected = expected_counts[i]
+
+        # Actual allocatable count
+        actual = min(expected, len(entity_chunks))
+        selected_chunks.extend(entity_chunks[:actual])
+        used_counts.append(actual)
+
+        # Accumulate remaining quota
+        remaining = expected - actual
+        if remaining > 0:
+            total_remaining += remaining
+
+    # Second round allocation: multi-round scanning to allocate remaining quotas
+    for _ in range(total_remaining):
+        allocated = False
+
+        # Scan entities one by one, allocate one chunk when finding unused chunks
+        for i, entity_rel in enumerate(entities_or_relations):
+            entity_chunks = entity_rel.get("sorted_chunks", [])
+
+            # Check if there are still unused chunks
+            if used_counts[i] < len(entity_chunks):
+                # Allocate one chunk
+                selected_chunks.append(entity_chunks[used_counts[i]])
+                used_counts[i] += 1
+                allocated = True
+                break
+
+        # If no chunks were allocated in this round, all entities are exhausted
+        if not allocated:
+            break
+
+    return selected_chunks
+
+
 class TokenTracker:
     """Track token usage for LLM calls."""
 
@@ -1726,3 +1705,217 @@ class TokenTracker:
             f"Completion tokens: {usage['completion_tokens']}, "
             f"Total tokens: {usage['total_tokens']}"
         )
+
+
+async def apply_rerank_if_enabled(
+    query: str,
+    retrieved_docs: list[dict],
+    global_config: dict,
+    enable_rerank: bool = True,
+    top_n: int = None,
+) -> list[dict]:
+    """
+    Apply reranking to retrieved documents if rerank is enabled.
+
+    Args:
+        query: The search query
+        retrieved_docs: List of retrieved documents
+        global_config: Global configuration containing rerank settings
+        enable_rerank: Whether to enable reranking from query parameter
+        top_n: Number of top documents to return after reranking
+
+    Returns:
+        Reranked documents if rerank is enabled, otherwise original documents
+    """
+    if not enable_rerank or not retrieved_docs:
+        return retrieved_docs
+
+    rerank_func = global_config.get("rerank_model_func")
+    if not rerank_func:
+        logger.warning(
+            "Rerank is enabled but no rerank model is configured. Please set up a rerank model or set enable_rerank=False in query parameters."
+        )
+        return retrieved_docs
+
+    try:
+        # Apply reranking - let rerank_model_func handle top_k internally
+        reranked_docs = await rerank_func(
+            query=query,
+            documents=retrieved_docs,
+            top_n=top_n,
+        )
+        if reranked_docs and len(reranked_docs) > 0:
+            if len(reranked_docs) > top_n:
+                reranked_docs = reranked_docs[:top_n]
+            logger.info(f"Successfully reranked: {len(retrieved_docs)} chunks")
+            return reranked_docs
+        else:
+            logger.warning("Rerank returned empty results, using original chunks")
+            return retrieved_docs
+
+    except Exception as e:
+        logger.error(f"Error during reranking: {e}, using original chunks")
+        return retrieved_docs
+
+
+async def process_chunks_unified(
+    query: str,
+    unique_chunks: list[dict],
+    query_param: "QueryParam",
+    global_config: dict,
+    source_type: str = "mixed",
+    chunk_token_limit: int = None,  # Add parameter for dynamic token limit
+) -> list[dict]:
+    """
+    Unified processing for text chunks: deduplication, chunk_top_k limiting, reranking, and token truncation.
+
+    Args:
+        query: Search query for reranking
+        chunks: List of text chunks to process
+        query_param: Query parameters containing configuration
+        global_config: Global configuration dictionary
+        source_type: Source type for logging ("vector", "entity", "relationship", "mixed")
+        chunk_token_limit: Dynamic token limit for chunks (if None, uses default)
+
+    Returns:
+        Processed and filtered list of text chunks
+    """
+    if not unique_chunks:
+        return []
+
+    origin_count = len(unique_chunks)
+
+    # 1. Apply reranking if enabled and query is provided
+    if query_param.enable_rerank and query and unique_chunks:
+        rerank_top_k = query_param.chunk_top_k or len(unique_chunks)
+        unique_chunks = await apply_rerank_if_enabled(
+            query=query,
+            retrieved_docs=unique_chunks,
+            global_config=global_config,
+            enable_rerank=query_param.enable_rerank,
+            top_n=rerank_top_k,
+        )
+
+    # 2. Filter by minimum rerank score if reranking is enabled
+    if query_param.enable_rerank and unique_chunks:
+        min_rerank_score = global_config.get("min_rerank_score", 0.5)
+        if min_rerank_score > 0.0:
+            original_count = len(unique_chunks)
+
+            # Filter chunks with score below threshold
+            filtered_chunks = []
+            for chunk in unique_chunks:
+                rerank_score = chunk.get(
+                    "rerank_score", 1.0
+                )  # Default to 1.0 if no score
+                if rerank_score >= min_rerank_score:
+                    filtered_chunks.append(chunk)
+
+            unique_chunks = filtered_chunks
+            filtered_count = original_count - len(unique_chunks)
+
+            if filtered_count > 0:
+                logger.info(
+                    f"Rerank filtering: {len(unique_chunks)} chunks remained (min rerank score: {min_rerank_score})"
+                )
+            if not unique_chunks:
+                return []
+
+    # 3. Apply chunk_top_k limiting if specified
+    if query_param.chunk_top_k is not None and query_param.chunk_top_k > 0:
+        if len(unique_chunks) > query_param.chunk_top_k:
+            unique_chunks = unique_chunks[: query_param.chunk_top_k]
+        logger.debug(
+            f"Kept chunk_top-k: {len(unique_chunks)} chunks (deduplicated original: {origin_count})"
+        )
+
+    # 4. Token-based final truncation
+    tokenizer = global_config.get("tokenizer")
+    if tokenizer and unique_chunks:
+        # Set default chunk_token_limit if not provided
+        if chunk_token_limit is None:
+            # Get default from query_param or global_config
+            chunk_token_limit = getattr(
+                query_param,
+                "max_total_tokens",
+                global_config.get("MAX_TOTAL_TOKENS", DEFAULT_MAX_TOTAL_TOKENS),
+            )
+
+        original_count = len(unique_chunks)
+        unique_chunks = truncate_list_by_token_size(
+            unique_chunks,
+            key=lambda x: x.get("content", ""),
+            max_token_size=chunk_token_limit,
+            tokenizer=tokenizer,
+        )
+        logger.debug(
+            f"Token truncation: {len(unique_chunks)} chunks from {original_count} "
+            f"(chunk available tokens: {chunk_token_limit}, source: {source_type})"
+        )
+
+    return unique_chunks
+
+
+def build_file_path(already_file_paths, data_list, target):
+    """Build file path string with length limit and deduplication
+
+    Args:
+        already_file_paths: List of existing file paths
+        data_list: List of data items containing file_path
+        target: Target name for logging warnings
+
+    Returns:
+        str: Combined file paths separated by GRAPH_FIELD_SEP
+    """
+    # set: deduplication
+    file_paths_set = {fp for fp in already_file_paths if fp}
+
+    # string: filter empty value and keep file order in already_file_paths
+    file_paths = GRAPH_FIELD_SEP.join(fp for fp in already_file_paths if fp)
+    # ignored file_paths
+    file_paths_ignore = ""
+    # add file_paths
+    for dp in data_list:
+        cur_file_path = dp.get("file_path")
+        # empty
+        if not cur_file_path:
+            continue
+
+        # skip duplicate item
+        if cur_file_path in file_paths_set:
+            continue
+        # add
+        file_paths_set.add(cur_file_path)
+
+        # check the length
+        if (
+            len(file_paths) + len(GRAPH_FIELD_SEP + cur_file_path)
+            < DEFAULT_MAX_FILE_PATH_LENGTH
+        ):
+            # append
+            file_paths += (
+                GRAPH_FIELD_SEP + cur_file_path if file_paths else cur_file_path
+            )
+        else:
+            # ignore
+            file_paths_ignore += GRAPH_FIELD_SEP + cur_file_path
+
+    if file_paths_ignore:
+        logger.warning(
+            f"Length of file_path exceeds {target}, ignoring new file: {file_paths_ignore}"
+        )
+    return file_paths
+
+
+def generate_track_id(prefix: str = "upload") -> str:
+    """Generate a unique tracking ID with timestamp and UUID
+
+    Args:
+        prefix: Prefix for the track ID (e.g., 'upload', 'insert')
+
+    Returns:
+        str: Unique tracking ID in format: {prefix}_{timestamp}_{uuid}
+    """
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    unique_id = str(uuid.uuid4())[:8]  # Use first 8 characters of UUID
+    return f"{prefix}_{timestamp}_{unique_id}"
