@@ -45,21 +45,22 @@ class JsonDocStatusStorage(DocStatusStorage):
         self._data = None
         self._storage_lock = None
         self.storage_updated = None
+        self.final_namespace = f"{self.workspace}_{self.namespace}"
 
     async def initialize(self):
         """Initialize storage data"""
         self._storage_lock = get_storage_lock()
-        self.storage_updated = await get_update_flag(self.namespace)
+        self.storage_updated = await get_update_flag(self.final_namespace)
         async with get_data_init_lock():
             # check need_init must before get_namespace_data
-            need_init = await try_initialize_namespace(self.namespace)
-            self._data = await get_namespace_data(self.namespace)
+            need_init = await try_initialize_namespace(self.final_namespace)
+            self._data = await get_namespace_data(self.final_namespace)
             if need_init:
                 loaded_data = load_json(self._file_name) or {}
                 async with self._storage_lock:
                     self._data.update(loaded_data)
                     logger.info(
-                        f"Process {os.getpid()} doc status load {self.namespace} with {len(loaded_data)} records"
+                        f"Process {os.getpid()} doc status load {self.final_namespace} with {len(loaded_data)} records"
                     )
 
     async def filter_keys(self, keys: set[str]) -> set[str]:
@@ -95,12 +96,43 @@ class JsonDocStatusStorage(DocStatusStorage):
                     try:
                         # Make a copy of the data to avoid modifying the original
                         data = v.copy()
-                        # If content is missing, use content_summary as content
-                        if "content" not in data and "content_summary" in data:
-                            data["content"] = data["content_summary"]
+                        # Remove deprecated content field if it exists
+                        data.pop("content", None)
                         # If file_path is not in data, use document id as file path
                         if "file_path" not in data:
                             data["file_path"] = "no-file-path"
+                        # Ensure new fields exist with default values
+                        if "metadata" not in data:
+                            data["metadata"] = {}
+                        if "error_msg" not in data:
+                            data["error_msg"] = None
+                        result[k] = DocProcessingStatus(**data)
+                    except KeyError as e:
+                        logger.error(f"Missing required field for document {k}: {e}")
+                        continue
+        return result
+
+    async def get_docs_by_track_id(
+        self, track_id: str
+    ) -> dict[str, DocProcessingStatus]:
+        """Get all documents with a specific track_id"""
+        result = {}
+        async with self._storage_lock:
+            for k, v in self._data.items():
+                if v.get("track_id") == track_id:
+                    try:
+                        # Make a copy of the data to avoid modifying the original
+                        data = v.copy()
+                        # Remove deprecated content field if it exists
+                        data.pop("content", None)
+                        # If file_path is not in data, use document id as file path
+                        if "file_path" not in data:
+                            data["file_path"] = "no-file-path"
+                        # Ensure new fields exist with default values
+                        if "metadata" not in data:
+                            data["metadata"] = {}
+                        if "error_msg" not in data:
+                            data["error_msg"] = None
                         result[k] = DocProcessingStatus(**data)
                     except KeyError as e:
                         logger.error(f"Missing required field for document {k}: {e}")
@@ -114,10 +146,10 @@ class JsonDocStatusStorage(DocStatusStorage):
                     dict(self._data) if hasattr(self._data, "_getvalue") else self._data
                 )
                 logger.debug(
-                    f"Process {os.getpid()} doc status writting {len(data_dict)} records to {self.namespace}"
+                    f"Process {os.getpid()} doc status writting {len(data_dict)} records to {self.final_namespace}"
                 )
                 write_json(data_dict, self._file_name)
-                await clear_all_update_flags(self.namespace)
+                await clear_all_update_flags(self.final_namespace)
 
     async def upsert(self, data: dict[str, dict[str, Any]]) -> None:
         """
@@ -127,20 +159,125 @@ class JsonDocStatusStorage(DocStatusStorage):
         """
         if not data:
             return
-        logger.debug(f"Inserting {len(data)} records to {self.namespace}")
+        logger.debug(f"Inserting {len(data)} records to {self.final_namespace}")
         async with self._storage_lock:
             # Ensure chunks_list field exists for new documents
             for doc_id, doc_data in data.items():
                 if "chunks_list" not in doc_data:
                     doc_data["chunks_list"] = []
             self._data.update(data)
-            await set_all_update_flags(self.namespace)
+            await set_all_update_flags(self.final_namespace)
 
         await self.index_done_callback()
 
     async def get_by_id(self, id: str) -> Union[dict[str, Any], None]:
         async with self._storage_lock:
             return self._data.get(id)
+
+    async def get_docs_paginated(
+        self,
+        status_filter: DocStatus | None = None,
+        page: int = 1,
+        page_size: int = 50,
+        sort_field: str = "updated_at",
+        sort_direction: str = "desc",
+    ) -> tuple[list[tuple[str, DocProcessingStatus]], int]:
+        """Get documents with pagination support
+
+        Args:
+            status_filter: Filter by document status, None for all statuses
+            page: Page number (1-based)
+            page_size: Number of documents per page (10-200)
+            sort_field: Field to sort by ('created_at', 'updated_at', 'id')
+            sort_direction: Sort direction ('asc' or 'desc')
+
+        Returns:
+            Tuple of (list of (doc_id, DocProcessingStatus) tuples, total_count)
+        """
+        # Validate parameters
+        if page < 1:
+            page = 1
+        if page_size < 10:
+            page_size = 10
+        elif page_size > 200:
+            page_size = 200
+
+        if sort_field not in ["created_at", "updated_at", "id", "file_path"]:
+            sort_field = "updated_at"
+
+        if sort_direction.lower() not in ["asc", "desc"]:
+            sort_direction = "desc"
+
+        # For JSON storage, we load all data and sort/filter in memory
+        all_docs = []
+
+        async with self._storage_lock:
+            for doc_id, doc_data in self._data.items():
+                # Apply status filter
+                if (
+                    status_filter is not None
+                    and doc_data.get("status") != status_filter.value
+                ):
+                    continue
+
+                try:
+                    # Prepare document data
+                    data = doc_data.copy()
+                    data.pop("content", None)
+                    if "file_path" not in data:
+                        data["file_path"] = "no-file-path"
+                    if "metadata" not in data:
+                        data["metadata"] = {}
+                    if "error_msg" not in data:
+                        data["error_msg"] = None
+
+                    doc_status = DocProcessingStatus(**data)
+
+                    # Add sort key for sorting
+                    if sort_field == "id":
+                        doc_status._sort_key = doc_id
+                    else:
+                        doc_status._sort_key = getattr(doc_status, sort_field, "")
+
+                    all_docs.append((doc_id, doc_status))
+
+                except KeyError as e:
+                    logger.error(f"Error processing document {doc_id}: {e}")
+                    continue
+
+        # Sort documents
+        reverse_sort = sort_direction.lower() == "desc"
+        all_docs.sort(
+            key=lambda x: getattr(x[1], "_sort_key", ""), reverse=reverse_sort
+        )
+
+        # Remove sort key from documents
+        for doc_id, doc in all_docs:
+            if hasattr(doc, "_sort_key"):
+                delattr(doc, "_sort_key")
+
+        total_count = len(all_docs)
+
+        # Apply pagination
+        start_idx = (page - 1) * page_size
+        end_idx = start_idx + page_size
+        paginated_docs = all_docs[start_idx:end_idx]
+
+        return paginated_docs, total_count
+
+    async def get_all_status_counts(self) -> dict[str, int]:
+        """Get counts of documents in each status for all documents
+
+        Returns:
+            Dictionary mapping status names to counts, including 'all' field
+        """
+        counts = await self.get_status_counts()
+
+        # Add 'all' field with total count
+        total_count = sum(counts.values())
+        counts["all"] = total_count
+
+        return counts
 
     async def delete(self, doc_ids: list[str]) -> None:
         """Delete specific records from storage by their IDs
@@ -163,7 +300,7 @@ class JsonDocStatusStorage(DocStatusStorage):
                     any_deleted = True
 
             if any_deleted:
-                await set_all_update_flags(self.namespace)
+                await set_all_update_flags(self.final_namespace)
 
     async def drop(self) -> dict[str, str]:
         """Drop all document status data from storage and clean up resources
@@ -181,11 +318,11 @@ class JsonDocStatusStorage(DocStatusStorage):
         try:
             async with self._storage_lock:
                 self._data.clear()
-                await set_all_update_flags(self.namespace)
+                await set_all_update_flags(self.final_namespace)
 
             await self.index_done_callback()
-            logger.info(f"Process {os.getpid()} drop {self.namespace}")
+            logger.info(f"Process {os.getpid()} drop {self.final_namespace}")
             return {"status": "success", "message": "data dropped"}
         except Exception as e:
-            logger.error(f"Error dropping {self.namespace}: {e}")
+            logger.error(f"Error dropping {self.final_namespace}: {e}")
             return {"status": "error", "message": str(e)}

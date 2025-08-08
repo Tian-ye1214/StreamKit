@@ -41,15 +41,16 @@ class JsonKVStorage(BaseKVStorage):
         self._data = None
         self._storage_lock = None
         self.storage_updated = None
+        self.final_namespace = f"{self.workspace}_{self.namespace}"
 
     async def initialize(self):
         """Initialize storage data"""
         self._storage_lock = get_storage_lock()
-        self.storage_updated = await get_update_flag(self.namespace)
+        self.storage_updated = await get_update_flag(self.final_namespace)
         async with get_data_init_lock():
             # check need_init must before get_namespace_data
-            need_init = await try_initialize_namespace(self.namespace)
-            self._data = await get_namespace_data(self.namespace)
+            need_init = await try_initialize_namespace(self.final_namespace)
+            self._data = await get_namespace_data(self.final_namespace)
             if need_init:
                 loaded_data = load_json(self._file_name) or {}
                 async with self._storage_lock:
@@ -63,7 +64,7 @@ class JsonKVStorage(BaseKVStorage):
                     data_count = len(loaded_data)
 
                     logger.info(
-                        f"Process {os.getpid()} KV load {self.namespace} with {data_count} records"
+                        f"Process {os.getpid()} KV load {self.final_namespace} with {data_count} records"
                     )
 
     async def index_done_callback(self) -> None:
@@ -77,10 +78,10 @@ class JsonKVStorage(BaseKVStorage):
                 data_count = len(data_dict)
 
                 logger.debug(
-                    f"Process {os.getpid()} KV writting {data_count} records to {self.namespace}"
+                    f"Process {os.getpid()} KV writting {data_count} records to {self.final_namespace}"
                 )
                 write_json(data_dict, self._file_name)
-                await clear_all_update_flags(self.namespace)
+                await clear_all_update_flags(self.final_namespace)
 
     async def get_all(self) -> dict[str, Any]:
         """Get all data from storage
@@ -150,7 +151,7 @@ class JsonKVStorage(BaseKVStorage):
 
         current_time = int(time.time())  # Get current Unix timestamp
 
-        logger.debug(f"Inserting {len(data)} records to {self.namespace}")
+        logger.debug(f"Inserting {len(data)} records to {self.final_namespace}")
         async with self._storage_lock:
             # Add timestamps to data based on whether key exists
             for k, v in data.items():
@@ -169,7 +170,7 @@ class JsonKVStorage(BaseKVStorage):
                 v["_id"] = k
 
             self._data.update(data)
-            await set_all_update_flags(self.namespace)
+            await set_all_update_flags(self.final_namespace)
 
     async def delete(self, ids: list[str]) -> None:
         """Delete specific records from storage by their IDs
@@ -192,97 +193,7 @@ class JsonKVStorage(BaseKVStorage):
                     any_deleted = True
 
             if any_deleted:
-                await set_all_update_flags(self.namespace)
-
-    async def drop_cache_by_modes(self, modes: list[str] | None = None) -> bool:
-        """Delete specific records from storage by cache mode
-
-        Importance notes for in-memory storage:
-        1. Changes will be persisted to disk during the next index_done_callback
-        2. update flags to notify other processes that data persistence is needed
-
-        Args:
-            modes (list[str]): List of cache modes to be dropped from storage
-
-        Returns:
-             True: if the cache drop successfully
-             False: if the cache drop failed
-        """
-        if not modes:
-            return False
-
-        try:
-            async with self._storage_lock:
-                keys_to_delete = []
-                modes_set = set(modes)  # Convert to set for efficient lookup
-
-                for key in list(self._data.keys()):
-                    # Parse flattened cache key: mode:cache_type:hash
-                    parts = key.split(":", 2)
-                    if len(parts) == 3 and parts[0] in modes_set:
-                        keys_to_delete.append(key)
-
-                # Batch delete
-                for key in keys_to_delete:
-                    self._data.pop(key, None)
-
-                if keys_to_delete:
-                    await set_all_update_flags(self.namespace)
-                    logger.info(
-                        f"Dropped {len(keys_to_delete)} cache entries for modes: {modes}"
-                    )
-
-            return True
-        except Exception as e:
-            logger.error(f"Error dropping cache by modes: {e}")
-            return False
-
-    # async def drop_cache_by_chunk_ids(self, chunk_ids: list[str] | None = None) -> bool:
-    #     """Delete specific cache records from storage by chunk IDs
-
-    #     Importance notes for in-memory storage:
-    #     1. Changes will be persisted to disk during the next index_done_callback
-    #     2. update flags to notify other processes that data persistence is needed
-
-    #     Args:
-    #         chunk_ids (list[str]): List of chunk IDs to be dropped from storage
-
-    #     Returns:
-    #          True: if the cache drop successfully
-    #          False: if the cache drop failed
-    #     """
-    #     if not chunk_ids:
-    #         return False
-
-    #     try:
-    #         async with self._storage_lock:
-    #             # Iterate through all cache modes to find entries with matching chunk_ids
-    #             for mode_key, mode_data in list(self._data.items()):
-    #                 if isinstance(mode_data, dict):
-    #                     # Check each cached entry in this mode
-    #                     for cache_key, cache_entry in list(mode_data.items()):
-    #                         if (
-    #                             isinstance(cache_entry, dict)
-    #                             and cache_entry.get("chunk_id") in chunk_ids
-    #                         ):
-    #                             # Remove this cache entry
-    #                             del mode_data[cache_key]
-    #                             logger.debug(
-    #                                 f"Removed cache entry {cache_key} for chunk {cache_entry.get('chunk_id')}"
-    #                             )
-
-    #                     # If the mode is now empty, remove it entirely
-    #                     if not mode_data:
-    #                         del self._data[mode_key]
-
-    #             # Set update flags to notify persistence is needed
-    #             await set_all_update_flags(self.namespace)
-
-    #         logger.info(f"Cleared cache for {len(chunk_ids)} chunk IDs")
-    #         return True
-    #     except Exception as e:
-    #         logger.error(f"Error clearing cache by chunk IDs: {e}")
-    #         return False
+                await set_all_update_flags(self.final_namespace)
 
     async def drop(self) -> dict[str, str]:
         """Drop all data from storage and clean up resources
@@ -301,13 +212,13 @@ class JsonKVStorage(BaseKVStorage):
         try:
             async with self._storage_lock:
                 self._data.clear()
-                await set_all_update_flags(self.namespace)
+                await set_all_update_flags(self.final_namespace)
 
             await self.index_done_callback()
-            logger.info(f"Process {os.getpid()} drop {self.namespace}")
+            logger.info(f"Process {os.getpid()} drop {self.final_namespace}")
             return {"status": "success", "message": "data dropped"}
         except Exception as e:
-            logger.error(f"Error dropping {self.namespace}: {e}")
+            logger.error(f"Error dropping {self.final_namespace}: {e}")
             return {"status": "error", "message": str(e)}
 
     async def _migrate_legacy_cache_structure(self, data: dict) -> dict:

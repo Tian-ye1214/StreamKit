@@ -6,12 +6,6 @@ from pages.lightrag.types import KnowledgeGraph, KnowledgeGraphNode, KnowledgeGr
 from pages.lightrag.utils import logger
 from pages.lightrag.base import BaseGraphStorage
 from pages.lightrag.constants import GRAPH_FIELD_SEP
-
-import pipmaster as pm
-
-if not pm.is_installed("networkx"):
-    pm.install("networkx")
-
 import networkx as nx
 from .shared_storage import (
     get_storage_lock,
@@ -398,6 +392,35 @@ class NetworkXStorage(BaseGraphStorage):
                     edge_data_with_nodes["target"] = v
                     matching_edges.append(edge_data_with_nodes)
         return matching_edges
+
+    async def get_all_nodes(self) -> list[dict]:
+        """Get all nodes in the graph.
+
+        Returns:
+            A list of all nodes, where each node is a dictionary of its properties
+        """
+        graph = await self._get_graph()
+        all_nodes = []
+        for node_id, node_data in graph.nodes(data=True):
+            node_data_with_id = node_data.copy()
+            node_data_with_id["id"] = node_id
+            all_nodes.append(node_data_with_id)
+        return all_nodes
+
+    async def get_all_edges(self) -> list[dict]:
+        """Get all edges in the graph.
+
+        Returns:
+            A list of all edges, where each edge is a dictionary of its properties
+        """
+        graph = await self._get_graph()
+        all_edges = []
+        for u, v, edge_data in graph.edges(data=True):
+            edge_data_with_nodes = edge_data.copy()
+            edge_data_with_nodes["source"] = u
+            edge_data_with_nodes["target"] = v
+            all_edges.append(edge_data_with_nodes)
+        return all_edges
 
     async def index_done_callback(self) -> bool:
         """Save data to disk"""
