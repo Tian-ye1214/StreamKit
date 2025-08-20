@@ -66,18 +66,25 @@ def extract_text_from_txt(file):
 
 
 async def extract_text(file):
-    file_type = file.name.split('.')[-1].lower()
+    file_type = file.split('.')[-1].lower()
     try:
         if file_type == 'pdf':
-            return extract_text_from_pdf(file)
+            content = extract_text_from_pdf(file)
         elif file_type in ['doc', 'docx']:
-            return extract_text_from_docx(file)
+            content = extract_text_from_docx(file)
         elif file_type in ['xlsx', 'xls']:
-            return extract_text_from_excel(file)
+            content = extract_text_from_excel(file)
         elif file_type == 'txt':
-            return extract_text_from_txt(file)
+            content = extract_text_from_txt(file)
         else:
+            content = None
             raise ValueError(f"不支持的文件格式：{file_type}")
+        content = re.sub(r'[ \t]{2,}', ' ', content)
+        content = re.sub(r'^[ \t]+|[ \t]+$', '', content, flags=re.MULTILINE)
+        content = re.sub(r'\n{2,}', '\n', content).strip('\n')
+        content = re.sub(r'([,?!;:。.])\1+', r'\1', content)
+        return content
     except Exception as e:
         print(f"处理文件时出错：{str(e)}")
         return None
+
