@@ -360,14 +360,18 @@ class BackendInteractionLogic:
             flex-direction: row-reverse;
             text-align: right;
             }
+
             .stBottom {
-                position: fixed;
-                top: 90%;
-                left: 60%;
-                bottom: auto;
-                transform: translate(-50%, -50%);
-                width: 100%;
-                max-width: 1000px;
+                position: sticky;
+                left: 0;
+                right: 0;
+                bottom: 0px;
+                width: 90%;
+                margin-left: auto;
+                margin-right: auto;
+                z-index: 99;
+                padding-top: 50px;
+                padding-bottom: 50px;
             }
             </style>
             """, unsafe_allow_html=True)
