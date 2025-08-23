@@ -296,7 +296,7 @@ class BackendInteractionLogic:
                 "role": "user",
                 "content": [
                     {"type": "text", "text": st.session_state.prompt},
-                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}},
+                    {"type": "image_url", "image_url": {"url": f"data:{st.session_state.uploaded_image.type};base64,{base64_image}"}},
                 ],
             })
         else:
