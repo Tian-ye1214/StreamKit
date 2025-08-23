@@ -39,10 +39,7 @@ async def main():
             模型配置
         </h3>
         """, unsafe_allow_html=True)
-        sections = st.radio("对话模式",
-                            ["文本对话", "视觉对话"],
-                            index=0,
-                            )
+        sections = st.radio("对话模式", ["文本对话", "视觉对话"], index=0)
 
         if sections == '文本对话':
             model_display = st.selectbox("选择模型", list(HIGHSPEED_MODEL_MAPPING.keys()), index=0, help="选择模型")
@@ -52,8 +49,7 @@ async def main():
             st.session_state.model = VISIONMODAL_MAPPING[model_display]
         if sections == '视觉对话':
             backend.image_upload()
-        await asyncio.gather(backend.user_interaction(), backend.start_new_conversation()
-                             , backend.parameter_configuration())
+        await asyncio.gather(backend.user_interaction(), backend.start_new_conversation(), backend.parameter_configuration())
 
         st.markdown("联系作者")
         st.markdown(f"""
@@ -68,7 +64,6 @@ async def main():
 
     if prompt := st.chat_input("在这里输入您的问题："):
         await asyncio.gather(backend.user_input(prompt), backend.search_interaction())
-
         with st.chat_message("assistant", avatar="🤖"):
             try:
                 with st.spinner('模型思考中'):
@@ -76,8 +71,36 @@ async def main():
             except Exception as e:
                 st.error(f"生成回答时出错: {str(e)}")
 
-    flag = st.session_state.get('messages', None)
-    if flag is not None and flag != []:
+    if st.session_state.get('chat_messages', []):
+        st.markdown("""
+                <style>
+                    .stChatMessage[data-testid="stChatMessage"] {
+                        background-color: transparent !important;
+                        border-radius: 8px;
+                        margin: 5px 0;
+                        padding: 10px;
+                    }
+                    .stChatMessage[data-testid="stChatMessage"] p {
+                        font-size: 24px !important;
+                    }
+                    [data-testid="stChatMessage"]:has([aria-label="Chat message from user"]) {
+                    flex-direction: row-reverse;
+                    text-align: right;
+                    }
+                    .stBottom {
+                        position: sticky;
+                        left: 0;
+                        right: 0;
+                        bottom: 0px;
+                        width: 90%;
+                        margin-left: auto;
+                        margin-right: auto;
+                        z-index: 99;
+                        padding-top: 50px;
+                        padding-bottom: 50px;
+                    }
+                    </style>
+                    """, unsafe_allow_html=True)
         Assistant_placeholder.markdown(f"""
         <h4 style='text-align: left; margin-top: 10px; margin-bottom: 10px; font-size: 16px;'>
             当前Assistant:{model_display}
@@ -88,9 +111,9 @@ async def main():
         <style>
         .stBottom {
             position: fixed;
-            top: 50%;
+            bottom: 50%;
             left: 60%;
-            bottom: auto;
+            top: auto;
             transform: translate(-50%, -50%);
             width: 100%;
             max-width: 1000px;
