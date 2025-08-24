@@ -468,3 +468,74 @@ def IntentRecognition(user_input):
         {"role": "user", "content": user_input},
     ]
     return message
+
+
+def Video():
+    user_prompt = """
+You are an **expert video prompt engineer**. Your task is to create **rich, detailed, cinematic prompts** that guide the model to produce **visually compelling and coherent videos**.  
+When writing prompts, always balance **clarity** with **creativity**, ensuring every detail contributes to the final output.  
+
+---
+
+## Key Elements of a Strong Prompt  
+
+A well-crafted video prompt should contain the following elements:  
+1. **Subject (Main Content)**  
+   - Clearly state the primary object, character, animal, or environment.  
+   - Example: *a futuristic city skyline, a young woman in a flowing red dress, a golden retriever puppy, a snow-covered mountain range.*  
+2. **Action**  
+   - Describe what the subject is doing in motion.  
+   - Example: *walking along a crowded street, turning their head anxiously, running through a forest, melting ice dripping from a frozen wall.*  
+3. **Style / Genre**  
+   - Specify the artistic direction, film genre, or animation style.  
+   - Example: *sci-fi thriller, film noir, anime-inspired fantasy, whimsical cartoon, hyper-realistic cinematic style.*  
+4. **Camera Perspective & Movement (Optional)**  
+   - Control viewpoint and movement for cinematic realism.  
+   - Example: *aerial shot, first-person perspective, over-the-shoulder, dolly zoom, slow tracking shot.*  
+5. **Composition (Optional)**  
+   - Indicate framing and lens choice.  
+   - Example: *wide shot, close-up, medium shot, two-shot, extreme close-up, panoramic wide angle.*  
+6. **Focus & Lens Effects (Optional)**  
+   - Define visual emphasis.  
+   - Example: *shallow depth of field, macro focus, soft focus, wide-angle distortion, cinematic lens flare.*  
+7. **Atmosphere & Lighting (Optional)**  
+   - Set the mood through tone, light, and color.  
+   - Example: *blue dusk light, neon glow, candlelit warmth, foggy dawn, dramatic high contrast shadows.*  
+
+---
+
+## Writing Tips for Effective Prompts  
+
+- **Use descriptive language**: Adjectives and adverbs create vivid imagery (*gritty, surreal, ethereal, vibrant, haunting*).  
+- **Add cinematic terms**: Think like a director (*establishing shot, slow motion, dramatic close-up*).  
+- **Emphasize facial & emotional detail**: Especially for human characters (*a portrait highlighting strained brows, trembling lips, determined eyes*).  
+- **Balance brevity with precision**: Too vague produces generic results, too long may reduce clarity—focus on essential, visual details.  
+
+---
+
+## Example Prompts  
+
+### Example 1 — Cinematic Detail  
+*A cinematic close-up shot of melting icicles dripping down a frozen rock wall, captured in cold blue tones. The camera zooms in slowly, highlighting the droplets as they fall, shimmering against the icy surface. The shallow depth of field focuses sharply on the water drops while the background dissolves into blurred, frosty textures, creating a chilling yet poetic mood.*  
+### Example 2 — Film Noir Scene  
+*A man in a worn green trench coat stands against a rough brick wall, dialing a rotary payphone under an eerie neon green glow. The camera slowly pushes in, emphasizing the tension in his clenched jaw and furrowed brows. A shallow focus isolates his desperate expression and the black phone dial, while the background melts into a haze of neon colors and shadowed silhouettes. The mood conveys urgency, isolation, and despair, in classic film noir style.*  
+### Example 3 — Animated Whimsy  
+*A short 3D animated sequence in a joyful cartoon style. A cute snow-leopard-like creature with expressive large eyes and a round, friendly body leaps playfully through a magical winter forest. Rounded snow-covered trees, gently falling snowflakes, and golden sunlight filtering through the branches set a warm, cheerful atmosphere. The creature’s lively movements and radiant smile express pure joy, enhanced by bright, vibrant colors and fluid, bouncy animation.*  
+### Example 4 — Architectural Concept  
+*A futuristic architectural visualization of a white concrete apartment building with smooth organic shapes, seamlessly integrated with lush greenery and futuristic design elements. The camera presents a wide aerial perspective, showcasing the harmony between modern architecture and natural growth.*  
+### Example 5 — Beach Serenity  
+*A wide-angle shot of a woman walking barefoot on a quiet beach at sunset, gazing toward the horizon. The warm orange light reflects across the water, while her relaxed posture conveys calmness and satisfaction.*  
+### Example 6 — Noir Couple  
+*A black-and-white film noir style scene: a man and woman walking together down a shadowy street, mysterious and cinematic. The high contrast lighting casts dramatic shadows, enhancing the tension and atmosphere.*  
+### Example 7 — First-Person Drive  
+*A first-person perspective shot from inside a vintage car driving through rain-soaked streets at night in Canada. Neon reflections ripple on the wet asphalt as the windshield wipers move in rhythmic sweeps. The scene feels moody and cinematic, evoking a classic retro film atmosphere.*  
+
+---
+
+When generating prompts, always structure them with **Subject + Action + Style + Camera + Composition + Focus + Atmosphere** where applicable. The more precise and descriptive you are, the more refined and cinematic the output will be.  
+Now, please randomly generate a video prompt. Just give the prompt, and do not output any irrelevant content or explanatory content.
+"""
+    message = [
+        {"role": "user", "content": user_prompt},
+    ]
+    return message
