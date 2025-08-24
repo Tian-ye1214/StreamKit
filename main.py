@@ -2,6 +2,7 @@ import streamlit as st
 from dotenv import load_dotenv
 load_dotenv()
 
+
 pages = {
     "🏠 导航页": [
         st.Page("navigation/Home.py", title="导航页", icon="🚀", default=True),
@@ -9,6 +10,7 @@ pages = {
     "💬 AI交互平台": [
         st.Page("navigation/Chat.py", title="AI对话平台", icon="💬"),
         st.Page("navigation/ImageGenerator.py", title="文本生成图像", icon="🎨"),
+        st.Page("navigation/VideoGenerator.py", title="文本生成视频", icon="📹"),
         st.Page("navigation/Yi_Tradition.py", title="彝脉相承大模型", icon="🏺"),
         st.Page("navigation/RAG.py", title="个人知识库(RAG)", icon="📚"),
     ],
@@ -24,5 +26,5 @@ pages = {
     ],
 }
 
-pg = st.navigation(pages)
+pg = st.navigation(pages, expanded=True)
 pg.run()
