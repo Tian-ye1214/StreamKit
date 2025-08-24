@@ -182,6 +182,7 @@ def main():
             [
                 ("AI对话平台", "Chat.py"),
                 ("文本生成图像", "ImageGenerator.py"),
+                ("文本生成视频", "VideoGenerator.py"),
                 ("彝脉相承大模型", "Yi_Tradition.py"),
                 ("个人知识库(RAG)", "RAG.py"),
             ]
