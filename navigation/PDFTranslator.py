@@ -92,7 +92,8 @@ def main():
                 "bing",
                 "LLM",
             ],
-            help="选择翻译服务提供商"
+            help="选择翻译服务提供商",
+            index=1
         )
 
         if service == "LLM":

@@ -13,12 +13,6 @@ from transformers import AutoProcessor, AutoModelForZeroShotObjectDetection
 
 
 def initialization():
-    if "dino" not in st.session_state:
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        model_path = os.path.join(base_dir, "pages/ModelCheckpoint/GroundingDINO-T")
-        st.session_state.dino_processor = AutoProcessor.from_pretrained(model_path, use_fast=True)
-        st.session_state.dino_model = AutoModelForZeroShotObjectDetection.from_pretrained(model_path).to(device)
     if "coordinates" not in st.session_state:
         st.session_state["coordinates"] = None
     if "clicks" not in st.session_state:
@@ -223,6 +217,7 @@ def auto_masks_generator():
 
 
 def inference_with_nature_language():
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     box_list = []
     if st.session_state.current_image is not None:
         if st.session_state.combine_image:
@@ -231,21 +226,24 @@ def inference_with_nature_language():
             masked_image = Image.fromarray(st.session_state.current_image)
         st.image(masked_image)
         if text_labels := st.chat_input("在这里输入想要分割的地方："):
+            if "dino" not in st.session_state:
+                base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                model_path = os.path.join(base_dir, "pages/ModelCheckpoint/GroundingDINO-T")
+                st.session_state.dino_processor = AutoProcessor.from_pretrained(model_path, use_fast=True)
+                st.session_state.dino_model = AutoModelForZeroShotObjectDetection.from_pretrained(model_path).to(device)
             if not all(ord(c) < 128 for c in text_labels):
                 st.error('目前模型只支持英文输入🥲')
                 return
             text_labels = 'a ' + text_labels + '.'
             text_labels = text_labels.lower()
-            inputs = st.session_state.dino_processor(images=masked_image, text=text_labels, return_tensors="pt").to(
-                "cuda")
             with st.spinner('开始检测'):
-                with torch.no_grad():
+                with torch.inference_mode():
+                    inputs = st.session_state.dino_processor(images=masked_image, text=text_labels,
+                                                             return_tensors="pt").to(device)
                     outputs = st.session_state.dino_model(**inputs)
-
                 results = st.session_state.dino_processor.post_process_grounded_object_detection(
                     outputs,
                     inputs.input_ids,
-                    box_threshold=0.4,
                     text_threshold=0.3,
                     target_sizes=[masked_image.size[::-1]]
                 )
