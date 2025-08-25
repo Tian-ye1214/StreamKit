@@ -2,6 +2,7 @@ import fitz
 import pandas as pd
 import docx
 import base64
+import re
 import streamlit as st
 
 
