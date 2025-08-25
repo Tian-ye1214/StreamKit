@@ -24,7 +24,11 @@ pages = {
     "🤖 Dify应用": [
         st.Page("navigation/Dify.py", title="小红书文案生成", icon="📝"),
     ],
+    "📬 反馈与建议": [
+        st.Page("navigation/suggest.py", title="意见与建议", icon="📝"),
+    ],
 }
 
 pg = st.navigation(pages, expanded=True)
 pg.run()
+
