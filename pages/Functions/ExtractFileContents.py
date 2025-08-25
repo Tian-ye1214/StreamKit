@@ -4,6 +4,7 @@ import docx
 import base64
 import re
 import streamlit as st
+import re
 
 
 @st.cache_data()
@@ -88,5 +89,6 @@ async def extract_text(file):
     except Exception as e:
         print(f"处理文件时出错：{str(e)}")
         return None
+
 
 
