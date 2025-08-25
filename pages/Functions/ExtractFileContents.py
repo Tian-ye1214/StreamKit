@@ -66,7 +66,7 @@ def extract_text_from_txt(file):
 
 
 async def extract_text(file):
-    file_type = file.split('.')[-1].lower()
+    file_type = file.name.split('.')[-1].lower()
     try:
         if file_type == 'pdf':
             content = extract_text_from_pdf(file)
@@ -87,4 +87,5 @@ async def extract_text(file):
     except Exception as e:
         print(f"处理文件时出错：{str(e)}")
         return None
+
 
