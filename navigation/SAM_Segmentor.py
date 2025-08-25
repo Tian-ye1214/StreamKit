@@ -14,10 +14,11 @@ from transformers import AutoProcessor, AutoModelForZeroShotObjectDetection
 
 def initialization():
     if "dino" not in st.session_state:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         model_path = os.path.join(base_dir, "pages/ModelCheckpoint/GroundingDINO-T")
         st.session_state.dino_processor = AutoProcessor.from_pretrained(model_path, use_fast=True)
-        st.session_state.dino_model = AutoModelForZeroShotObjectDetection.from_pretrained(model_path).to("cuda")
+        st.session_state.dino_model = AutoModelForZeroShotObjectDetection.from_pretrained(model_path).to(device)
     if "coordinates" not in st.session_state:
         st.session_state["coordinates"] = None
     if "clicks" not in st.session_state:

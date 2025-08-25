@@ -2,8 +2,6 @@ import requests
 from bs4 import BeautifulSoup
 import json
 from datetime import datetime
-import os
-from openai import AsyncOpenAI
 import streamlit as st
 from pages.Functions.Constants import HIGHSPEED_MODEL_MAPPING
 from pages.Functions.Prompt import SkySentry_prompt

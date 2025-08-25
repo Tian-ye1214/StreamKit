@@ -6,7 +6,6 @@ import zipfile
 import io
 import aiofiles
 import aiofiles.os as aios
-import asyncio
 
 
 class UserLogManager:

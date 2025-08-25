@@ -8,9 +8,8 @@ import cv2
 
 class SAM2Segment:
     def __init__(self, sam2_checkpoint, model_cfg):
-        self.device = torch.device("cuda")
-        torch.autocast("cuda", dtype=torch.bfloat16).__enter__()
-        np.random.seed(3)
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        torch.autocast(self.device, dtype=torch.bfloat16).__enter__()
         self.sam2_checkpoint = sam2_checkpoint
         self.model_cfg = model_cfg
         self.sam2_model = build_sam2(self.model_cfg, self.sam2_checkpoint, device=self.device)

@@ -63,6 +63,14 @@ EMBEDDING_DIM = {
     "BCE-Base": 768,
 }
 
+RERANKER_MODEL_MAPPING = {
+    "Qwen3-Reranker-8B": "Qwen/Qwen3-Reranker-8B",
+    "Qwen3-Reranker-4B": "Qwen/Qwen3-Reranker-4B",
+    "Qwen3-Reranker-0.6B": "Qwen/Qwen3-Reranker-0.6B",
+    "BGE-reranker-v2": "BAAI/bge-reranker-v2-m3",
+    "BCE-reranker": "netease-youdao/bce-reranker-base_v1",
+}
+
 SEARCH_METHODS = {
     "文本搜索": "text_search",
     "新闻搜索": "news_search",

@@ -5,7 +5,6 @@ import os
 import fitz
 import numpy as np
 from pdf2zh.doclayout import OnnxModel
-import asyncio
 
 
 def translate_pdf(file, lang_in="en", lang_out="zh", service="google", thread=4, api_key=None, base_url=None,
