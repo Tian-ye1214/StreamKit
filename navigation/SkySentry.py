@@ -285,6 +285,10 @@ async def interaction(system):
         st.error(f"\n未找到{st.session_state.current_province}预警信息，请输入省份或直辖市")
         return
 
+    if st.session_state.selected_alert:
+        st.info("\n预警详细信息：")
+        st.markdown(st.session_state.alert_details[st.session_state.selected_alert])
+
     if st.session_state.province_alerts:
         st.success(f"\n共找到 {len(st.session_state.province_alerts)} 条{st.session_state.current_province}预警信息：")
         col1, col2, col3 = st.columns(3)
@@ -303,10 +307,6 @@ async def interaction(system):
                             if alert_id not in st.session_state.alert_details:
                                 st.session_state.alert_details[alert_id] = await system.get_alert_detail(alert['url'])
                 start_idx += current_alerts
-
-        if st.session_state.selected_alert:
-            st.info("\n预警详细信息：")
-            st.markdown(st.session_state.alert_details[st.session_state.selected_alert])
 
 
 async def news_generation(system, use_custom_template):
