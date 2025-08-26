@@ -32,5 +32,7 @@ tenacity
 tiktoken
 peft
 
-git+https://github.com/facebookresearch/sam2.git
+json-repair
+
+# git+https://github.com/facebookresearch/sam2.git
 
