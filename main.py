@@ -9,8 +9,9 @@ pages = {
     ],
     "💬 AI交互平台": [
         st.Page("navigation/Chat.py", title="AI对话平台", icon="💬"),
-        st.Page("navigation/ImageGenerator.py", title="文本生成图像", icon="🎨"),
-        st.Page("navigation/VideoGenerator.py", title="文本生成视频", icon="📹"),
+        st.Page("navigation/AncientBuilding.py", title="古建筑图像生成", icon="🏯"),
+        st.Page("navigation/ImageGenerator.py", title="图像生成", icon="🎨"),
+        st.Page("navigation/VideoGenerator.py", title="视频生成", icon="📹"),
         st.Page("navigation/Yi_Tradition.py", title="彝脉相承大模型", icon="🏺"),
         st.Page("navigation/RAG.py", title="个人知识库(RAG)", icon="📚"),
     ],
