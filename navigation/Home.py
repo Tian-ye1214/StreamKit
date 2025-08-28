@@ -181,8 +181,9 @@ def main():
             "感受AI能力边界<br>Explore the Boundaries of AI Abilities",
             [
                 ("AI对话平台", "Chat.py"),
-                ("文本生成图像", "ImageGenerator.py"),
-                ("文本生成视频", "VideoGenerator.py"),
+                ("古建筑图像生成", "AncientBuilding.py"),
+                ("图像生成", "ImageGenerator.py"),
+                ("视频生成", "VideoGenerator.py"),
                 ("彝脉相承大模型", "Yi_Tradition.py"),
                 ("个人知识库(RAG)", "RAG.py"),
             ]
