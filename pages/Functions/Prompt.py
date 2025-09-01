@@ -236,7 +236,7 @@ def SkySentry_prompt(alert_info, defense_guide, news_template, generate_news=Fal
         {defense_guide}
     
         === 新闻模板示例 ===
-        （注：仅参考结构，不复制内容）
+        （注：仅参考结构）
         {news_template}
     
         【生成要求】
@@ -251,7 +251,7 @@ def SkySentry_prompt(alert_info, defense_guide, news_template, generate_news=Fal
            - 时间窗口（精确到小时段）
            - 地理范围（精确到区县级）
            - 量化指标（毫米/摄氏度等计量单位）
-           - 防御措施（按政府/企业/个人的分级建议）
+           - 防御指南（以【输入数据】中提出为准，不得增删内容与改变内容）
     
         3. 格式规范：
            以新闻模板示例为准
@@ -260,7 +260,6 @@ def SkySentry_prompt(alert_info, defense_guide, news_template, generate_news=Fal
         禁止虚构未提及的气象参数
         不得调整防御措施的优先级顺序
         需使用"短句+数据标注"的呈现方式
-        专业术语后需括号注释通俗解释（如：阵风9级（可吹断树枝））
     
         【异常处理】
         若发现数据矛盾（如：寒潮预警中出现强降雨描述），请标注：[数据校验提示]并保持原始内容

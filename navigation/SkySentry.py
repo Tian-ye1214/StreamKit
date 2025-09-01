@@ -224,11 +224,16 @@ class WeatherAlertNewsWriter:
     async def generate_news(self, alert_info, defense_guide, custom_template=None):
         """使用指定模板或默认模板生成预警新闻"""
         DEFAULT_NEWS_TEMPLATE = """
-        四川省阿坝藏族羌族自治州若尔盖县气象台发布雷电黄色预警信号
-        若尔盖县气象台2025年04月25日18时03分发布雷电黄色预警信号：若尔盖县达扎寺镇、唐克镇、辖曼镇、嫩哇乡、麦溪乡、红星镇、降扎乡、占哇乡、铁布镇、阿西镇、巴西镇、包座乡、求吉乡6小时内可能发生雷电活动，可能会造成雷电灾害。过程来临时可能伴有冰雹、阵性大风和短时强降水等强对流天气。请相关部门做好防雷工作，避免户外活动。
-        防御指南：
-        1.政府及相关部门按照职责做好防雷工作；
-        2.密切关注天气，尽量避免户外活动。
+兰州中心气象台发布暴雨蓝色预警
+进入兰州天气预报
+兰州中心气象台2025年09月01日15时29分发布暴雨蓝色预警：预计未来24小时，我省临夏州部分地方及兰州市西部、武威市南部、甘南州北部有大雨，其中临夏州积石山至太子山沿线、兰州永登北部、武威天祝南部山区有暴雨，主要降水时段为1日17时至2日08时，最大累积雨量可达60毫米以上。请注意防范降水与前期降水叠加效应可能引发的中小河流洪水、城乡积涝、山洪、滑坡和泥石流等次生灾害。
+
+防御指南：
+
+1.政府及相关部门按照职责做好防暴雨准备工作；
+2.学校、幼儿园采取适当措施，保证学生和幼儿安全；
+3.驾驶人员应当注意道路积水和交通阻塞，确保安全；
+4.检查城市、农田、鱼塘排水系统，做好排涝准备.
         """
         try:
             template_content = custom_template if custom_template else DEFAULT_NEWS_TEMPLATE
@@ -254,8 +259,9 @@ class WeatherAlertNewsWriter:
             model_parameter = {
                 "model": st.session_state.selected_model,
                 "messages": messages,
-                "temperature": 0.3,
-                "max_tokens": 8192
+                "temperature": 0.8,
+                "top_p": 0.95,
+                "max_tokens": 4096,
             }
             await st.session_state.Client.call(reason_placeholder, message_placeholder, True, **model_parameter)
 
