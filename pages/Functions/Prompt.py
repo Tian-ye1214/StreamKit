@@ -224,55 +224,23 @@ def grammer_prompt(file_content):
 
 def SkySentry_prompt(alert_info, defense_guide, news_template, generate_news=False):
     if generate_news:
-        SkySentry_system_prompt = f"""
-        【角色定义】
-        你是一名资深气象新闻编辑，擅长将专业气象数据转化为通俗易懂的新闻报道。当前需要根据气象局提供的原始预警信息生成符合媒体发布标准的新闻稿。
-    
-        【输入数据】
-        === 预警信息 ===
-        {alert_info}
-    
-        === 防御指南 ===
-        {defense_guide}
-    
-        === 新闻模板示例 ===
-        （注：仅参考结构）
-        {news_template}
-    
-        【生成要求】
-        1. 内容解析四步法：
-           (1) 定位核心灾害类型（暴雨/台风/寒潮等）
-           (2) 提取关键参数：时间范围、影响区域、强度等级
-           (3) 量化影响：降水量级、风力等级、温度变化
-           (4) 匹配防御措施优先级
-    
-        2. 新闻要素必须包含：
-           - 警示标题（含气象预警等级颜色）
-           - 时间窗口（精确到小时段）
-           - 地理范围（精确到区县级）
-           - 量化指标（毫米/摄氏度等计量单位）
-           - 防御指南（以【输入数据】中提出为准，不得增删内容与改变内容）
-    
-        3. 格式规范：
-           以新闻模板示例为准
-    
-        【质量控制】
-        禁止虚构未提及的气象参数
-        不得调整防御措施的优先级顺序
-        需使用"短句+数据标注"的呈现方式
-    
-        【异常处理】
-        若发现数据矛盾（如：寒潮预警中出现强降雨描述），请标注：[数据校验提示]并保持原始内容
-        """
-
-        SkySentry_user_prompt = """
-        请基于以上规范生成新闻稿，注意：
-        1. 重要参数需用【】标出
-        2. 防御措施按"政府应急部门-社会单位-居民个人"三级分类
-        3. 不能生成虚假内容。
+        SkySentry_user_prompt = f"""
+        你是气象灾害预警领域的专家，你的任务是根据以下预警信息与防御指南生成与新闻模板形式一致的气象灾害预警新闻。
+        预警信息: {alert_info}
+        
+        防御指南：{defense_guide}
+        
+        新闻模板：{news_template}
+        
+        注意事项：
+        1. 生成内容必须基于给定的预警信息和防御指南；
+        2. 生成内容必须符合新闻模板的形式，但不得复制其内容；
+        3. 不要产生无关内容和虚假信息；
+        4. 专注于内容输出，不要生成无关内容，不要生成解释性内容；
+        5. 必须严格输出防御指南信息，不得增删或臆想内容。若没有防御指南，则指出"暂无防御指南"；
         """
     else:
-        SkySentry_system_prompt = f"""
+        SkySentry_user_prompt = f"""
         作为专业的气象灾害分析师，请按以下结构处理预警信息：
 
         # 分析维度
@@ -314,14 +282,7 @@ def SkySentry_prompt(alert_info, defense_guide, news_template, generate_news=Fal
         待分析数据：
         {alert_info}
         """
-
-        SkySentry_user_prompt = """
-        请基于以上规范总结当前全国预警情况，注意：
-        1. 重要参数需用【】标出
-        2. 不能生成虚假内容。
-        """
     message = [
-        {"role": "system", "content": SkySentry_system_prompt},
         {"role": "user", "content": SkySentry_user_prompt},
     ]
 
