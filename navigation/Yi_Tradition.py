@@ -3,10 +3,9 @@ import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM, TextIteratorStreamer
 import asyncio
 from threading import Thread
-from pages.Functions.Constants import HIGHSPEED_MODEL_MAPPING
 from pages.Functions.CallLLM import CallLLM
+from pages.Functions.Prompt import Yi_Interactive
 import re
-import random
 import gc
 
 
@@ -21,6 +20,9 @@ MODEL_MAPPING = {
     'Yi-0.0.4-LoRA': '/home/li/桌面/models/Qwen3-8B-TrainingCheckpoints/Yi-0.0.4-lora',
     'Yi-0.0.4-Full': '/home/li/桌面/models/Qwen3-8B-TrainingCheckpoints/Yi-0.0.4-full',
     'Yi-0.0.4-Pro': '/home/li/桌面/models/Qwen3-8B-TrainingCheckpoints/Yi-0.0.4_pro',
+    'Yi-0.0.5': '/home/li/桌面/models/Qwen3-8B-TrainingCheckpoints/Yi-0.0.5',
+    'Yi-1.0.0-WithOutTokens': '/home/li/桌面/models/Qwen3-8B-TrainingCheckpoints/Yi-1.0.0-WithOutToken',
+    'Yi-1.0.0-WithTokens': '/home/li/桌面/models/Qwen3-8B-TrainingCheckpoints/Yi-1.0.0-WithToken',
 }
 
 
@@ -53,8 +55,7 @@ def call_yi(info_placeholder, current_message, generated_text, message_placehold
         min_p=0.0,
         temperature=st.session_state.temperature,
         streamer=st.session_state.streamer,
-        repetition_penalty=1.5,
-        no_repeat_ngram_size=5,
+        repetition_penalty=1.1,
     )
     thread = Thread(target=st.session_state.model.generate, kwargs=generate_params)
     thread.start()
@@ -89,9 +90,10 @@ def contains_yi_text(text):
 async def parameter_settings():
     with st.sidebar:
         previous_model = st.session_state.get('model_display', None)
-        st.session_state.model_display = st.selectbox("选择模型", list(MODEL_MAPPING.keys()), index=6, help="选择模型")
+        st.session_state.model_display = st.selectbox("选择模型", list(MODEL_MAPPING.keys()), index=len(MODEL_MAPPING.keys()) - 1, help="选择模型")
         st.session_state.model_path = MODEL_MAPPING[st.session_state.model_display]
-        st.session_state.use_agent = st.toggle("使用Agent", value=True, help="使用Agent决策任务调度")
+        st.session_state.use_agent = st.toggle("使用Agent", value=False, help="使用Agent决策任务调度")
+        st.session_state.Interactive = st.toggle("交互式彝文对话-beta", value=False, help="使用外部大模型辅助彝文交互")
         with st.expander("对话参数", expanded=False):
             col1, col2 = st.columns(2)
             with col1:
@@ -163,11 +165,8 @@ async def main():
             generated_text = ""
             try:
                 if st.session_state.use_agent and not contains_yi_text(user_input):
-                    choicen_model = random.choice(list(HIGHSPEED_MODEL_MAPPING.keys()))
-                    info_placeholder.markdown(f'选择{choicen_model}执行任务')
-                    choicen_model = HIGHSPEED_MODEL_MAPPING[choicen_model]
                     model_parameter = {
-                        "model": choicen_model,
+                        "model": 'kimi-k2-0711-preview',
                         "messages": st.session_state.messages,
                         "temperature": st.session_state.temperature,
                         "top_p": st.session_state.top_p,
@@ -175,11 +174,26 @@ async def main():
                         "frequency_penalty": st.session_state.frequency_penalty,
                         "max_tokens": 8192
                     }
-                    generated_text = await st.session_state.client.call(reason_placeholder, message_placeholder, True, model_parameter)
+                    generated_text = await st.session_state.client.call(reason_placeholder, message_placeholder, True, **model_parameter)
                 else:
+                    if st.session_state.Interactive:
+                        with st.spinner('模型思考中'):
+                            message = Yi_Interactive(user_input)
+                            model_parameter_Interactive = {
+                                "model": 'kimi-k2-0711-preview',
+                                "messages": message,
+                                "temperature": 0.8,
+                                "top_p": 0.95,
+                                "max_tokens": 512
+                            }
+                            text = await st.session_state.client.call(reason_placeholder, message_placeholder
+                                                                      , False, **model_parameter_Interactive)
+                            current_message = [
+                                {"role": "system", "content": "You are a helpful assistant."},
+                                {"role": "user", "content": text}
+                            ]
                     with torch.inference_mode():
-                        generated_text = call_yi(info_placeholder, current_message, generated_text,
-                                                       message_placeholder)
+                        generated_text = call_yi(info_placeholder, current_message, generated_text, message_placeholder)
                 st.session_state.messages.append({"role": "assistant", "content": generated_text})
             except Exception as e:
                 st.error(f"生成回答时出错: {str(e)}")
