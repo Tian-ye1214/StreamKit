@@ -1,6 +1,8 @@
-# Streamlit拼好网
-
-这是一个基于Streamlit开发的多功能Web应用平台，集成了多种AI和工具功能。
+<div align="center">
+  <img src="static/logo.png" alt="StreamKit Logo" width="200" height="200">
+  <h1>StreamKit -- AI Nexus</h1>
+  <p>这是一个基于Streamlit开发的多功能Web应用平台，集成了多种AI和工具功能。</p>
+</div>
 
 ~~具体套百家壳还差85家~~
 
