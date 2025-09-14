@@ -176,16 +176,15 @@ def main():
         create_card(
             "platform",
             "fas fa-terminal",
-            "AI交互平台",
-            "Current: AI Platform",
-            "感受AI能力边界<br>Explore the Boundaries of AI Abilities",
+            "言语洞澈(文本类应用)",
+            "Text & Language Processing",
+            "文字如诗，智能如心<br>Words flow like poetry, intelligence flows like the heart",
             [
                 ("AI对话平台", "Chat.py"),
-                ("古建筑图像生成", "AncientBuilding.py"),
-                ("图像生成", "ImageGenerator.py"),
-                ("视频生成", "VideoGenerator.py"),
-                ("彝脉相承大模型", "Yi_Tradition.py"),
                 ("个人知识库(RAG)", "RAG.py"),
+                ("PDF固版翻译", "PDFTranslator.py"),
+                ("论文分段润色", "PaperPolishing.py"),
+                ("小红书文案生成", "Dify.py"),
             ]
         )
 
@@ -193,15 +192,14 @@ def main():
         create_card(
             "tools-section",
             "fas fa-tools",
-            "工具集合",
-            "Tool Collection",
-            "专业工具和实用功能集合<br>Professional tools and utility functions",
+            "新域探微(研究类应用)",
+            "Research & Analysis Tools",
+            "探索未知，洞察真理<br>Exploring the unknown, discerning the truth",
             [
-                ("知识图谱检索", "LightRAG.py"),
-                ("PDF固版翻译", "PDFTranslator.py"),
-                ("分割万物", "SAM_Segmentor.py"),
-                ("论文分段润色", "PaperPolishing.py"),
+                ("彝脉相承大模型", "Yi_Tradition.py"),
+                ("古建筑图像生成", "AncientBuilding.py"),
                 ("天眸预警", "SkySentry.py"),
+                ("知识图谱检索", "LightRAG.py"),
             ]
         )
 
@@ -209,11 +207,13 @@ def main():
         create_card(
             "dify-section",
             "fas fa-robot",
-            "Dify 应用",
-            "Dify Applications",
-            "基于 Dify 平台的智能应用<br>Smart applications based on Dify platform",
+            "融象观言(多模态类应用)",
+            "Multimodal AI Applications",
+            "万象皆可创，智能绘未来<br>All phenomena can be created, intelligence paints the future",
             [
-                ("小红书文案生成", "Dify.py"),
+                ("图像生成", "ImageGenerator.py"),
+                ("视频生成", "VideoGenerator.py"),
+                ("分割万物", "SAM_Segmentor.py"),
             ]
         )
     st.markdown("<br><br>", unsafe_allow_html=True)
