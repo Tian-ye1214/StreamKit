@@ -14,4 +14,7 @@ predictions_score.json
 lib/
 .env
 LICENSE
+*.safetensors
+*.onnx
+*.pt
 
