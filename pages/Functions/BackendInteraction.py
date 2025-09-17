@@ -190,7 +190,7 @@ class BackendInteractionLogic:
                 st.session_state.temperature = st.slider("Temperature", 0.0, 2.0, 0.6, 0.1,
                                                          help="控制模型回答的多样性，值越高表示回复多样性越高")
                 st.session_state.presence_penalty = st.slider("Presence Penalty", -2.0, 2.0, 0.0, 0.1,
-                                                              help="控制回复主题的多样性性，值越高重复性越低")
+                                                              help="控制回复主题的多样性，值越高重复性越低")
                 st.session_state.max_tokens = st.number_input("Max Tokens",
                                                               min_value=1,
                                                               max_value=32768,

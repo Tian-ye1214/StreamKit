@@ -37,25 +37,26 @@ def unload_model():
     gc.collect()
 
 
-def call_yi(info_placeholder, current_message, generated_text, message_placeholder):
+def call_model(info_placeholder, current_message, generated_text, message_placeholder):
     info_placeholder.markdown(f'已选择{st.session_state.model_display}执行任务')
-    st.session_state.text = st.session_state.tokenizer.apply_chat_template(
+    text = st.session_state.tokenizer.apply_chat_template(
         current_message,
         tokenize=False,
         add_generation_prompt=True,
         enable_thinking=False
     )
-    st.session_state.model_inputs = st.session_state.tokenizer([st.session_state.text],
+    st.session_state.model_inputs = st.session_state.tokenizer([text],
                                                                return_tensors="pt").to(st.session_state.model.device)
     generate_params = dict(
         inputs=st.session_state.model_inputs.input_ids,
+        min_new_tokens=st.session_state.min_tokens,
         max_new_tokens=st.session_state.max_tokens,
         top_k=st.session_state.top_k,
         top_p=st.session_state.top_p,
         min_p=0.0,
         temperature=st.session_state.temperature,
         streamer=st.session_state.streamer,
-        repetition_penalty=1.1,
+        repetition_penalty=st.session_state.repetition_penalty,
     )
     thread = Thread(target=st.session_state.model.generate, kwargs=generate_params)
     thread.start()
@@ -74,8 +75,6 @@ async def ini_message():
         ]
     if 'client' not in st.session_state:
         st.session_state.client = CallLLM()
-    if 'Yi_message_list' not in st.session_state:
-        st.session_state.Yi_message_list = []
 
 
 def contains_yi_text(text):
@@ -99,8 +98,13 @@ async def parameter_settings():
             with col1:
                 st.session_state.temperature = st.slider("Temperature", 0.0, 2.0, 0.7, 0.1,
                                                          help="控制模型回答的多样性，值越高表示回复多样性越高")
-                st.session_state.presence_penalty = st.slider("Presence Penalty", -2.0, 2.0, 0.0, 0.1,
-                                                              help="控制回复主题的多样性性，值越高重复性越低")
+                st.session_state.repetition_penalty = st.slider("Presence Penalty", 0.0, 2.0, 1.1, 0.1,
+                                                              help="控制回复的多样性，值越高重复性越低")
+                st.session_state.min_tokens = st.number_input("Min Tokens",
+                                                              min_value=0,
+                                                              max_value=512,
+                                                              value=10,
+                                                              help="生成文本的最小长度")
                 st.session_state.max_tokens = st.number_input("Max Tokens",
                                                               min_value=1,
                                                               max_value=32768,
@@ -111,8 +115,17 @@ async def parameter_settings():
                                                    help="控制词汇选择的多样性,值越高表示潜在生成词汇越多样")
                 st.session_state.top_k = st.slider("Top K", 0, 80, 20, 1,
                                                    help="控制词汇选择的多样性,值越高表示潜在生成词汇越多样")
+                st.session_state.presence_penalty = st.slider("Presence Penalty", -2.0, 2.0, 0.0, 0.1,
+                                                              help="控制回复主题的多样性，值越高重复性越低")
                 st.session_state.frequency_penalty = st.slider("Frequency Penalty", -2.0, 2.0, 0.0, 0.1,
                                                                help="控制回复中相同词汇重复性，值越高重复性越低")
+
+        if st.button("开启新对话", help="开启新对话将清空当前对话记录"):
+            st.session_state.messages = [
+                {"role": "system", "content": "You are a helpful assistant."},
+            ]
+            st.success("已成功开启新的对话")
+            st.rerun()
 
         if previous_model != st.session_state.model_display or 'tokenizer' not in st.session_state or 'model' not in st.session_state:
             unload_model()
@@ -193,7 +206,7 @@ async def main():
                                 {"role": "user", "content": text}
                             ]
                     with torch.inference_mode():
-                        generated_text = call_yi(info_placeholder, current_message, generated_text, message_placeholder)
+                        generated_text = call_model(info_placeholder, current_message, generated_text, message_placeholder)
                 st.session_state.messages.append({"role": "assistant", "content": generated_text})
             except Exception as e:
                 st.error(f"生成回答时出错: {str(e)}")
