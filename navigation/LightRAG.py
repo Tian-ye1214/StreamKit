@@ -9,7 +9,8 @@ from pages.lightrag.llm.siliconcloud import siliconcloud_embedding
 from pages.lightrag import LightRAG, QueryParam
 from pages.lightrag.utils import EmbeddingFunc, logger, set_verbose_debug
 from pages.lightrag.kg.shared_storage import initialize_pipeline_status
-from pages.lightrag.rerank import custom_rerank
+from pages.lightrag.rerank import cohere_rerank
+from functools import partial
 from pages.Functions.ExtractFileContents import extract_text
 from pages.Functions.Constants import EMBEDDING_MODEL_MAPPING, HIGHSPEED_MODEL_MAPPING, EMBEDDING_DIM, \
     RERANKER_MODEL_MAPPING
@@ -32,11 +33,11 @@ def initialize():
     if "llm_model" not in st.session_state:
         st.session_state.llm_model = 'deepseek-chat'
     if "embedding_model" not in st.session_state:
-        st.session_state.embed_model = 'Qwen/Qwen3-Embedding-8B'
+        st.session_state.embed_model = 'Qwen/Qwen3-Embedding-0.6B'
     if "reranker_model" not in st.session_state:
-        st.session_state.embed_model = 'Qwen/Qwen3-Reranker-8B'
+        st.session_state.reranker_model = 'Qwen/Qwen3-Reranker-0.6B'
     if "embed_dim" not in st.session_state:
-        st.session_state.embed_dim = 4096
+        st.session_state.embed_dim = 1024
     if "rag_messages" not in st.session_state:
         st.session_state.rag_messages = []
     if 'has_document' not in st.session_state:
@@ -125,19 +126,6 @@ async def llm_model_func(prompt, system_prompt=None, history_messages=[], **kwar
     )
 
 
-async def my_rerank_func(query: str, documents: list, top_n: int = None, **kwargs):
-    reranker_model = st.session_state.get('reranker_model')
-    return await custom_rerank(
-        query=query,
-        documents=documents,
-        model=reranker_model,
-        base_url="https://api.siliconflow.cn/v1/rerank",
-        api_key=os.environ.get('SiliconFlow_API_KEY'),
-        top_n=top_n or 10,
-        **kwargs,
-    )
-
-
 async def init_rag(filename=None):
     if not filename:
         raise ValueError("必须提供文件名来初始化RAG")
@@ -148,6 +136,13 @@ async def init_rag(filename=None):
     else:
         os.makedirs(working_dir)
         st.success(f"创建新的知识库：{os.path.basename(working_dir)}")
+
+    rerank_model_func = partial(
+        cohere_rerank,
+        model=st.session_state.reranker_model,
+        api_key=os.environ.get('SiliconFlow_API_KEY'),
+        base_url='https://api.siliconflow.cn/v1/rerank',
+    )
 
     rag = LightRAG(
         working_dir=working_dir,
@@ -162,7 +157,7 @@ async def init_rag(filename=None):
                 api_key=os.environ.get('SiliconFlow_API_KEY')
             ),
         ),
-        rerank_model_func=my_rerank_func,
+        rerank_model_func=rerank_model_func,
         addon_params={"language": "Simplified Chinese"},
     )
     await rag.initialize_storages()
@@ -310,8 +305,6 @@ def create_current_query_subgraph():
                     label=node_data["entity"],
                     entity_type=node_data["type"],
                     description=node_data["description"],
-                    created_at=node_data["created_at"],
-                    file_path=node_data["file_path"]
                 )
 
         if st.session_state.current_query_edges:
@@ -325,8 +318,6 @@ def create_current_query_subgraph():
                     entity2_id,
                     id=edge_id,
                     description=edge_data["description"],
-                    created_at=edge_data["created_at"],
-                    file_path=edge_data["file_path"]
                 )
 
         if len(G.nodes) == 0:
@@ -414,14 +405,14 @@ async def main():
 
         emb_model_display = st.selectbox("选择嵌入模型",
                                          list(EMBEDDING_MODEL_MAPPING.keys()),
-                                         index=0,
+                                         index=2,
                                          help="选择用于文本向量化的模型",
                                          key="embed_model_select")
         use_reranker = st.checkbox("是否启用重排序模型", value=False)
         if use_reranker:
             rerank_model_display = st.selectbox("选择重排序模型",
                                                 list(RERANKER_MODEL_MAPPING.keys()),
-                                                index=0,
+                                                index=2,
                                                 help="选择用于文本向量化的模型",
                                                 key="reranker_model_select")
             st.session_state.reranker_model = RERANKER_MODEL_MAPPING[rerank_model_display]
@@ -436,12 +427,13 @@ async def main():
         st.subheader("🔍 查询模式")
         query_mode = st.selectbox(
             "选择查询模式",
-            options=["local", "global", "hybrid", "mix"],
+            options=["local", "global", "hybrid", "mix", "bypass"],
             index=3,
             help="""- local: 局部模式，匹配最相似的实体关系及邻接实体关系
                     - global: 全局模式，匹配最相似的实体以及间接实体关系
                     - hybrid: local模式 + global模式
-                    - mix: naive模式 + hybrid模式""",
+                    - mix: naive模式 + hybrid模式
+                    - bypass: 不使用RAG直接问答""",
             key="query_mode_select"
         )
 
