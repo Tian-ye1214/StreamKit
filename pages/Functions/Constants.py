@@ -8,9 +8,9 @@ HIGHSPEED_MODEL_MAPPING = {
     "混元-T1(腾讯元宝)": "hunyuan-t1-latest",
     "Kimi-K2": "kimi-k2-0711-preview",
     "MiniMax-M1": "MiniMax-M1",
-    "Claude-4.1-Opus-Thinking": "claude-opus-4-1-20250805-thinking",
+    "Claude-4-Sonnet-Thinking": "claude-sonnet-4-20250514-thinking",
     "GPT-5": "gpt-5",
-    "Gemini-2.5-pro-thinking": "gemini-2.5-pro",
+    "Gemini-2.5-pro-thinking": "gemini-2.5-pro-thinking",
     "Grok4": "grok-4",
     "LLaMA-4-Maverick": "llama-4-maverick-17b-128e-instruct",
 }
@@ -19,9 +19,9 @@ VISIONMODAL_MAPPING = {
     "Qwen2.5-VL-72B": "qwen2.5-vl-72b-instruct",
     "文心一言-4.5": "ernie-4.5-turbo-vl-32k",
     "智谱GLM-4.5": "glm-4.5v",
-    "Gemini2.5-pro-thinking": "gemini-2.5-pro",
+    "Gemini2.5-pro-thinking": "gemini-2.5-pro-thinking",
     "GPT-5": "gpt-5",
-    "Claude-4.1-Opus-Thinking": "claude-opus-4-1-20250805-thinking",
+    "Claude-4.1-Opus-Thinking": "claude-sonnet-4-20250514-thinking",
 }
 
 MAX_TOKEN_LIMIT = {
@@ -35,10 +35,10 @@ MAX_TOKEN_LIMIT = {
     "ernie-4.5-turbo-128k": 131072,
     "doubao-seed-1.6-thinking": 32768,
     "hunyuan-t1-latest": 32768,
-    "gemini-2.5-pro": 200000,
+    "gemini-2.5-pro-thinking": 200000,
     "gpt-5": 131072,
     "grok-4": 200000,
-    "claude-opus-4-1-20250805-thinking": 200000,
+    "claude-sonnet-4-20250514-thinking": 200000,
     "llama-4-maverick-17b-128e-instruct": 200000,
 }
 

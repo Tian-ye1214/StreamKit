@@ -110,9 +110,9 @@ async def main():
         st.markdown("""
         <style>
         .stBottom {
-            position: fixed;
-            bottom: 50%;
-            left: 60%;
+            position: relative;
+            bottom: 30%;
+            left: 35%;
             top: auto;
             transform: translate(-50%, -50%);
             width: 100%;

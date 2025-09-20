@@ -1,5 +1,6 @@
 [server]
 enableStaticServing = true
+folderWatchBlacklist = ['torch']
 
 [[theme.fontFaces]]
 family = "SpaceGrotesk"

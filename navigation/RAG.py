@@ -207,7 +207,7 @@ def initialization(rag_system):
     if 'current_user' not in st.session_state:
         st.session_state.current_user = None
     if 'selected_model' not in st.session_state:
-        st.session_state.selected_model = "deepseek-chat"
+        st.session_state.selected_model = "kimi-k2-0711-preview"
     if 'embed_model' not in st.session_state:
         st.session_state.tokenizer, st.session_state.embed_model = rag_system.load_embedding_model()
     if 'intent' not in st.session_state:

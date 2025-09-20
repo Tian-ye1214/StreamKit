@@ -214,7 +214,7 @@ def main():
     if user_input := st.chat_input("在这里输入您的提示词："):
         messages = Translator(user_input)
         model_parameter = {
-            "model": 'deepseek-chat',
+            "model": 'kimi-k2-0711-preview',
             "messages": messages,
             "temperature": 0.8,
             "top_p": 0.95,

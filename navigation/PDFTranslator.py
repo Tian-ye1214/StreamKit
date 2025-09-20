@@ -31,7 +31,6 @@ def translate_pdf(file, lang_in="en", lang_out="zh", service="google", thread=4,
         return stream_mono, stream_dual
     except Exception as e:
         st.error(f"翻译过程出错：{str(e)}")
-        return None, None
 
 
 def display_pdf(file, prefix=""):

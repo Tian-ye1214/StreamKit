@@ -12,7 +12,7 @@ swanlog/
 generated_predictions.jsonl
 predictions_score.json
 lib/
-.env
+*.env
 LICENSE
 *.safetensors
 *.onnx

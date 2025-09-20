@@ -11,12 +11,12 @@ torchvision>=0.20.1
 git+https://github.com/facebookresearch/sam2.git
 
 
-numpy==1.26.4
+numpy==2.2.6
 pandas
 scikit-learn
 nano_vectordb
 
-pdf2zh
+pdf2zh==1.9.11
 pymupdf
 python-docx
 

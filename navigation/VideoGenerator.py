@@ -132,7 +132,7 @@ def main():
         if st.button("不知道写点什么？让AI来点惊喜！"):
             messages = Video()
             model_parameter = {
-                "model": 'deepseek-reasoner',
+                "model": 'kimi-k2-0711-preview',
                 "messages": messages,
                 "temperature": 1.5,
                 "top_p": 0.95,
