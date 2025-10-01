@@ -15,7 +15,7 @@ pages = {
         st.Page("navigation/Dify.py", title="小红书文案生成", icon="📝"),
     ],
     "🔭 新域探微(研究类应用)": [
-        st.Page("navigation/Yi_Tradition.py", title="彝脉相承大模型", icon="🏺"),
+        st.Page("navigation/Nuosu.py", title="彝脉相承大模型", icon="🏺"),
         st.Page("navigation/AncientBuilding.py", title="古建筑图像生成", icon="🏯"),
         st.Page("navigation/SkySentry.py", title="天眸预警", icon="👁️"),
         st.Page("navigation/LightRAG.py", title="知识图谱检索", icon="🕸️"),

@@ -196,7 +196,7 @@ def main():
             "Research & Analysis Tools",
             "探索未知，洞察真理<br>Exploring the unknown, discerning the truth",
             [
-                ("彝脉相承大模型", "Yi_Tradition.py"),
+                ("彝脉相承大模型", "Nuosu.py"),
                 ("古建筑图像生成", "AncientBuilding.py"),
                 ("天眸预警", "SkySentry.py"),
                 ("知识图谱检索", "LightRAG.py"),
