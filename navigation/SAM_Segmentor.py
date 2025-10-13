@@ -35,7 +35,6 @@ def initialization():
         st.session_state.SAM2 = SAM2Segment(sam2_checkpoint, model_cfg)
         st.session_state.input_point = []
         st.session_state.input_label = []
-        st.session_state.box_input = []
     if "box_coordinates" not in st.session_state:
         st.session_state.box_coordinates = None
 
@@ -141,34 +140,17 @@ def box_inference():
             coords = get_rectangle_coords(st.session_state.box_coordinates)
             draw.rectangle(coords, fill=None, outline="red", width=2)
 
-        st.markdown("### 框选目标区域")
-        value = streamlit_image_coordinates(
-            img,
-            key="box_select",
-            click_and_drag=True,
-            height=img.height,
-            use_column_width=False
-        )
-
-        if value is not None:
-            point1 = (value["x1"], value["y1"])
-            point2 = (value["x2"], value["y2"])
-
-            if (point1[0] != point2[0] and point1[1] != point2[1] and
-                    st.session_state.box_coordinates != (point1, point2)):
-                st.session_state.box_coordinates = (point1, point2)
-
+            if st.session_state.get('last_box_coordinates', None) != st.session_state.box_coordinates:
+                st.session_state.last_box_coordinates = st.session_state.box_coordinates
                 box_coords = get_rectangle_coords(st.session_state.box_coordinates)
-
                 try:
                     with st.spinner("正在生成分割结果..."):
-                        st.session_state.box_input.append([box_coords[0], box_coords[1], box_coords[2], box_coords[3]])
+                        box_input = [box_coords[0], box_coords[1], box_coords[2], box_coords[3]]
 
                         masks = st.session_state.SAM2.point_and_box_inference(st.session_state.current_image,
-                                                                                    None,
-                                                                                    None,
-                                                                                    np.array(
-                                                                                        st.session_state.box_input))
+                                                                              None,
+                                                                              None,
+                                                                              np.array(box_input))
                         if len(masks.shape) == 4:
                             masks = masks[-1]
                             set_image = np.array(st.session_state.combine_image)
@@ -190,6 +172,22 @@ def box_inference():
                 except Exception as e:
                     st.error(f"框选分割出错: {str(e)}")
 
+        st.markdown("### 框选目标区域")
+        value = streamlit_image_coordinates(
+            img,
+            key="box_select",
+            click_and_drag=True,
+            height=img.height,
+        )
+
+        if value:
+            point1 = (value["x1"], value["y1"])
+            point2 = (value["x2"], value["y2"])
+
+            if point1[0] != point2[0] and point1[1] != point2[1] and st.session_state.box_coordinates != (point1, point2):
+                st.session_state.box_coordinates = (point1, point2)
+                st.rerun()
+
 
 def auto_masks_generator():
     auto_masks = None
@@ -197,10 +195,10 @@ def auto_masks_generator():
         if st.session_state.current_image is not None:
             st.markdown("### 自动掩码生成")
             if st.session_state.combine_image is not None:
-                st.image(st.session_state.combine_image, use_container_width=True, caption="分割图像")
+                masked_image = st.session_state.combine_image
             else:
-                st.image(st.session_state.current_image, use_container_width=True, caption="原始图像")
-
+                masked_image = Image.fromarray(st.session_state.current_image)
+            st.image(masked_image)
             if st.button("生成全图掩码", help="自动生成全图所有物体的掩码"):
                 with st.spinner("正在生成全图掩码..."):
                     auto_masks = st.session_state.SAM2.auto_mask_genarator(st.session_state.current_image)
@@ -254,8 +252,6 @@ def inference_with_nature_language():
                 if not box_list:
                     st.error('检测失败')
                     return
-                else:
-                    st.info(f'检测到目标位置：{box_list}')
             with st.spinner('开始分割'):
                 masks = st.session_state.SAM2.point_and_box_inference(masked_image, input_box=np.array(box_list))
                 all_masks = np.zeros(masked_image.size[::-1], dtype=np.float32)
@@ -356,7 +352,6 @@ def main():
                 <div class="history-list">
                     <p>📚 历史记录（最近10条）：</p>
                     {history}
-                </div>
             </div>
             """.format(
             x=st.session_state.clicks[-1]["x"] if st.session_state.clicks else "N/A",
