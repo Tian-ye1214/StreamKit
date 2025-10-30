@@ -357,8 +357,8 @@ class BackendInteractionLogic:
                 font-size: 24px !important;
             }
             [data-testid="stChatMessage"]:has([aria-label="Chat message from user"]) {
-            flex-direction: row-reverse;
-            text-align: right;
+                flex-direction: row;
+                text-align: left;
             }
 
             .stBottom {
