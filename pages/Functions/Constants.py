@@ -6,7 +6,7 @@ HIGHSPEED_MODEL_MAPPING = {
     "文心一言-4.5": "ernie-4.5-turbo-128k",
     "豆包-1.6-thinking": "doubao-seed-1.6-thinking",
     "Kimi-K2": "kimi-k2-0711-preview",
-    "Claude-4.5-Sonnet-Thinking": "claude-sonnet-4-5-20250929-thinking",
+    "Claude-4.5-Sonnet": "claude-sonnet-4-5-20250929",
     "GPT-5": "gpt-5",
     "Gemini-2.5-pro-thinking": "gemini-2.5-pro-thinking",
     "Grok4": "grok-4",
@@ -19,14 +19,14 @@ VISIONMODAL_MAPPING = {
     "智谱GLM-4.5": "glm-4.5v",
     "Gemini2.5-pro-thinking": "gemini-2.5-pro-thinking",
     "GPT-5": "gpt-5",
-    "Claude-4.5-Sonnet-Thinking": "claude-sonnet-4-5-20250929-thinking",
+    "Claude-4.5-Sonnet": "claude-sonnet-4-5-20250929",
 }
 
 MAX_TOKEN_LIMIT = {
     "deepseek-chat": 65536,
     "deepseek-reasoner": 65536,
     "qwen3-235b-a22b": 32768,
-    "Qwen3-VL-235B": 32768,
+    "qwen3-vl-235b-a22b-thinking": 32768,
     "glm-4.6": 32768,
     "glm-4.5v": 32768,
     "ernie-4.5-turbo-vl-32k": 32768,
@@ -35,7 +35,7 @@ MAX_TOKEN_LIMIT = {
     "gemini-2.5-pro-thinking": 200000,
     "gpt-5": 131072,
     "grok-4": 200000,
-    "claude-sonnet-4-5-20250929-thinking": 200000,
+    "claude-sonnet-4-5-20250929": 200000,
     "llama-4-maverick-17b-128e-instruct": 200000,
 }
 
