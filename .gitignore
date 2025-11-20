@@ -19,3 +19,14 @@ LICENSE
 *.onnx
 *.pt
 
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+.ipynb_checkpoints
+
+venv/
+env/
+ENV/

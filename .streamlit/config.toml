@@ -1,6 +1,18 @@
 [server]
-enableStaticServing = true
-folderWatchBlacklist = ['torch']
+fileWatcherType = "none"
+
+[runner]
+fastReruns = true
+magicEnabled = true
+
+[client]
+showErrorDetails = true
+toolbarMode = "auto"
+
+[logger]
+level = "error"
+messageFormat = "%(message)s"
+
 
 [[theme.fontFaces]]
 family = "SpaceGrotesk"

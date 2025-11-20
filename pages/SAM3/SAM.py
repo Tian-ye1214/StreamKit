@@ -1,4 +1,20 @@
 import numpy as np
+import warnings
+import os
+import sys
+
+warnings.filterwarnings('ignore')
+os.environ['PYTHONWARNINGS'] = 'ignore'
+class SuppressOutput:
+    def __enter__(self):
+        self._original_stderr = sys.stderr
+        sys.stderr = open(os.devnull, 'w')
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        sys.stderr.close()
+        sys.stderr = self._original_stderr
+
 from pages.SAM3.SAMCode.model_builder import build_sam3_image_model
 from pages.SAM3.SAMCode.model.sam3_image_processor import Sam3Processor
 import cv2

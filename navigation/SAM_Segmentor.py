@@ -1,4 +1,10 @@
 # -*- coding: utf-8 -*-
+import os
+import warnings
+
+warnings.filterwarnings('ignore')
+os.environ['PYTHONWARNINGS'] = 'ignore'
+
 import streamlit as st
 from streamlit_image_coordinates import streamlit_image_coordinates
 import numpy as np
@@ -197,7 +203,18 @@ def inference_with_nature_language():
         confidence = st.slider("confidence", 0.0, 1.0, 0.3, 0.1, help="控制过滤严格度。值越高过滤越严格")
     if st.session_state.current_image is not None:
         masked_image = st.session_state.combine_image if st.session_state.combine_image else Image.fromarray(st.session_state.current_image)
-        st.image(masked_image)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("#### 原始图片")
+            st.image(Image.fromarray(st.session_state.current_image), use_container_width=True)
+        with col2:
+            st.markdown("#### 分割结果")
+            if st.session_state.combine_image is not None:
+                st.image(st.session_state.combine_image, use_container_width=True)
+            else:
+                st.info("等待分割结果...")
+        
         if text_labels := st.chat_input("在这里输入想要分割的地方："):
             masks = st.session_state.SAM_model.concept_inference(masked_image, text_labels, confidence)
             if masks.shape[0] == 0:
