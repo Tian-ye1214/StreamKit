@@ -33,7 +33,7 @@ def submit_video(prompt, resolution, seconds):
         "Content-Type": "application/json"
     }
     payload = {
-        "model": "sora-2",
+        "model": "sora-2-pro",
         "prompt": str(prompt),
         "size": str(resolution),
         "seconds": str(seconds),
@@ -96,13 +96,14 @@ def main():
     resolution_mapping = {
         "16:9": "1280x720",
         "9:16": "720x1280",
-        "1:1": "960x960",
+        "1080P(横向)": "1792x1024",
+        "1080P(纵向)": "1024x1792",
     }
     with st.sidebar:
         st.title("生成新视频")
         resolution_display = st.selectbox("视频分辨率", list(resolution_mapping.keys()), index=0, help="视频分辨率")
         resolution = resolution_mapping[resolution_display]
-        seconds = st.slider("生成秒数", 1, 12, 8, 1)
+        seconds = st.slider("生成秒数", 4, 12, 8, 4)
         st.divider()
         if st.button("不知道写点什么？让AI来点惊喜！"):
             messages = Video()

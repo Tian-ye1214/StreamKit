@@ -8,8 +8,6 @@ git+https://github.com/huggingface/transformers.git
 opencv-python
 streamlit_image_coordinates
 torchvision>=0.20.1
-git+https://github.com/facebookresearch/sam2.git
-
 
 numpy==2.2.6
 pandas
